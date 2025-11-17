@@ -117,6 +117,19 @@ void rebuild_displays(Game *game) {
                 // Assign terminal (cycle through available terminals)
                 display->terminal_index = game->display_count % MAX_TERMINALS;
 
+                // Spawn the terminal immediately so it shows content on the display
+                Terminal *term = &game->terminals[display->terminal_index];
+                if (!term->active) {
+                    if (!terminal_spawn_shell(term)) {
+                        fprintf(stderr, "[WARN] Failed to spawn shell for display #%d\n", game->display_count + 1);
+                    } else {
+#if DEBUG_MODE
+                        printf("[DEBUG] Spawned terminal %d for display #%d\n",
+                               display->terminal_index, game->display_count + 1);
+#endif
+                    }
+                }
+
                 // Mark all tiles in this display as processed
                 for (int dy = 0; dy < stack_height; dy++) {
                     for (int dx = 0; dx < stack_width; dx++) {
@@ -169,7 +182,7 @@ void activate_display(Game *game, int display_index) {
 
     Terminal *term = &game->terminals[term_idx];
 
-    // Initialize terminal if not already active
+    // Spawn shell if not already active (shouldn't happen since we spawn at display creation)
     if (!term->active) {
         if (!terminal_spawn_shell(term)) {
             fprintf(stderr, "Failed to spawn shell for display\n");
@@ -177,7 +190,7 @@ void activate_display(Game *game, int display_index) {
         }
     }
 
-    // Enter terminal mode
+    // Enter terminal mode (fullscreen)
     game->terminal_mode = true;
     game->active_terminal = term_idx;
 }
