@@ -856,10 +856,15 @@ void render_terminal(const Terminal *term, uint32_t *pixels) {
     int start_x = (SCREEN_WIDTH - term_pixel_width) / 2;
     int start_y = (SCREEN_HEIGHT - term_pixel_height) / 2;
 
-    // Clear screen to black
+    // Clear screen to dark blue
     for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
-        pixels[i] = 0xFF000000;
+        pixels[i] = 0xFF001020;
     }
+
+    // Draw help bar at top
+    const char *help_text = "TERMINAL MODE - Press ESC to exit and return to game";
+    int help_x = (SCREEN_WIDTH - ((int)strlen(help_text) * 8)) / 2;
+    draw_text(pixels, help_x, 10, help_text, pack_color(255, 255, 100));
 
     // Render each cell
     for (int row = 0; row < TERM_ROWS; row++) {

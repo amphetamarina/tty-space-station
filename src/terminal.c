@@ -168,6 +168,7 @@ void terminal_put_char(Terminal *term, char ch) {
         term->cursor_y = TERM_ROWS - 1;
     }
 
+    // Auto-wrap to next line if we're at the edge
     if (term->cursor_x >= TERM_COLS) {
         term->cursor_x = 0;
         terminal_newline(term);
@@ -179,6 +180,12 @@ void terminal_put_char(Terminal *term, char ch) {
         term->cells[term->cursor_y][term->cursor_x].bg_color = term->current_bg;
         term->cells[term->cursor_y][term->cursor_x].attrs = term->current_attrs;
         term->cursor_x++;
+
+        // Auto-wrap when we hit the right edge
+        if (term->cursor_x >= TERM_COLS) {
+            term->cursor_x = 0;
+            terminal_newline(term);
+        }
     }
 }
 
@@ -247,13 +254,31 @@ void terminal_handle_csi(Terminal *term) {
         }
         case 'K': { // Clear line
             int n = (term->ansi_param_count > 0) ? term->ansi_params[0] : 0;
-            if (n == 0 && term->cursor_y < TERM_ROWS) {
-                // Clear to end of line
-                for (int x = term->cursor_x; x < TERM_COLS; x++) {
-                    term->cells[term->cursor_y][x].ch = ' ';
-                    term->cells[term->cursor_y][x].fg_color = term->current_fg;
-                    term->cells[term->cursor_y][x].bg_color = term->current_bg;
-                    term->cells[term->cursor_y][x].attrs = term->current_attrs;
+            if (term->cursor_y < TERM_ROWS) {
+                if (n == 0) {
+                    // Clear to end of line
+                    for (int x = term->cursor_x; x < TERM_COLS; x++) {
+                        term->cells[term->cursor_y][x].ch = ' ';
+                        term->cells[term->cursor_y][x].fg_color = term->current_fg;
+                        term->cells[term->cursor_y][x].bg_color = term->current_bg;
+                        term->cells[term->cursor_y][x].attrs = term->current_attrs;
+                    }
+                } else if (n == 1) {
+                    // Clear from beginning of line
+                    for (int x = 0; x <= term->cursor_x && x < TERM_COLS; x++) {
+                        term->cells[term->cursor_y][x].ch = ' ';
+                        term->cells[term->cursor_y][x].fg_color = term->current_fg;
+                        term->cells[term->cursor_y][x].bg_color = term->current_bg;
+                        term->cells[term->cursor_y][x].attrs = term->current_attrs;
+                    }
+                } else if (n == 2) {
+                    // Clear entire line
+                    for (int x = 0; x < TERM_COLS; x++) {
+                        term->cells[term->cursor_y][x].ch = ' ';
+                        term->cells[term->cursor_y][x].fg_color = term->current_fg;
+                        term->cells[term->cursor_y][x].bg_color = term->current_bg;
+                        term->cells[term->cursor_y][x].attrs = term->current_attrs;
+                    }
                 }
             }
             break;
