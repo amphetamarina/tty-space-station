@@ -12,6 +12,26 @@
 #include <string.h>
 #include <SDL2/SDL.h>
 
+// ANSI color palette (16 colors)
+static const uint32_t ansi_colors[16] = {
+    0xFF000000, // 0: Black
+    0xFFAA0000, // 1: Red
+    0xFF00AA00, // 2: Green
+    0xFFAA5500, // 3: Yellow/Brown
+    0xFF0000AA, // 4: Blue
+    0xFFAA00AA, // 5: Magenta
+    0xFF00AAAA, // 6: Cyan
+    0xFFAAAAAA, // 7: White/Gray
+    0xFF555555, // 8: Bright Black/Gray
+    0xFFFF5555, // 9: Bright Red
+    0xFF55FF55, // 10: Bright Green
+    0xFFFFFF55, // 11: Bright Yellow
+    0xFF5555FF, // 12: Bright Blue
+    0xFFFF55FF, // 13: Bright Magenta
+    0xFF55FFFF, // 14: Bright Cyan
+    0xFFFFFFFF  // 15: Bright White
+};
+
 int render_furniture(const Game *game, uint32_t *pixels, double dirX, double dirY, double planeX, double planeY,
                      double *zbuffer) {
     const Player *player = &game->player;
@@ -859,20 +879,20 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
 
             // Render display walls with terminal content
             if (hitTile == 'D' || hitTile == 'd') {
-                // Start with dark display background
+                // Default: dark display background
                 color = pack_color(15, 20, 25);
 
-                // If we have an active terminal, render text
+                // If we have an active terminal, render actual text with font
                 if (display_term) {
                     // Map wall texture coordinates to terminal grid
-                    // Add border - use middle 80% of texture for text
-                    if (texX > TEX_SIZE * 0.1 && texX < TEX_SIZE * 0.9 &&
-                        texY > TEX_SIZE * 0.1 && texY < TEX_SIZE * 0.9) {
+                    // Add border - use middle 85% of texture for text
+                    if (texX > TEX_SIZE * 0.075 && texX < TEX_SIZE * 0.925 &&
+                        texY > TEX_SIZE * 0.075 && texY < TEX_SIZE * 0.925) {
 
-                        int textAreaWidth = (int)(TEX_SIZE * 0.8);
-                        int textAreaHeight = (int)(TEX_SIZE * 0.8);
-                        int localX = texX - (int)(TEX_SIZE * 0.1);
-                        int localY = texY - (int)(TEX_SIZE * 0.1);
+                        int textAreaWidth = (int)(TEX_SIZE * 0.85);
+                        int textAreaHeight = (int)(TEX_SIZE * 0.85);
+                        int localX = texX - (int)(TEX_SIZE * 0.075);
+                        int localY = texY - (int)(TEX_SIZE * 0.075);
 
                         // Map to terminal character grid
                         int termX = (localX * TERM_COLS) / textAreaWidth;
@@ -881,10 +901,33 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
                         if (termX >= 0 && termX < TERM_COLS && termY >= 0 && termY < TERM_ROWS) {
                             const TermCell *cell = &display_term->cells[termY][termX];
 
-                            // Simple text rendering - show characters as colored blocks
-                            if (cell->ch > 32 && cell->ch < 127) {
-                                // Character present - use bright color
-                                color = pack_color(200, 220, 200);
+                            // Render actual character using font8x8
+                            unsigned char ch = (unsigned char)cell->ch;
+                            if (ch >= 32 && ch <= 126) {
+                                const unsigned char *bitmap = font8x8_basic[ch];
+
+                                // Calculate pixel position within character cell
+                                int charWidth = textAreaWidth / TERM_COLS;
+                                int charHeight = textAreaHeight / TERM_ROWS;
+                                int charLocalX = localX % charWidth;
+                                int charLocalY = localY % charHeight;
+
+                                // Map to 8x8 font bitmap
+                                int fontX = (charLocalX * 8) / charWidth;
+                                int fontY = (charLocalY * 8) / charHeight;
+
+                                if (fontX >= 0 && fontX < 8 && fontY >= 0 && fontY < 8) {
+                                    bool pixel_set = bitmap[fontY] & (1 << fontX);
+                                    if (pixel_set) {
+                                        // Use terminal cell colors
+                                        color = ansi_colors[cell->fg_color & 0x0F];
+                                    } else {
+                                        color = ansi_colors[cell->bg_color & 0x0F];
+                                    }
+                                } else {
+                                    // Background
+                                    color = ansi_colors[cell->bg_color & 0x0F];
+                                }
                             }
                         }
                     } else {
@@ -1069,34 +1112,14 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
     }
 }
 
-// ANSI color palette (16 colors)
-static const uint32_t ansi_colors[16] = {
-    0xFF000000, // 0: Black
-    0xFFAA0000, // 1: Red
-    0xFF00AA00, // 2: Green
-    0xFFAA5500, // 3: Yellow/Brown
-    0xFF0000AA, // 4: Blue
-    0xFFAA00AA, // 5: Magenta
-    0xFF00AAAA, // 6: Cyan
-    0xFFAAAAAA, // 7: White/Gray
-    0xFF555555, // 8: Bright Black/Gray
-    0xFFFF5555, // 9: Bright Red
-    0xFF55FF55, // 10: Bright Green
-    0xFFFFFF55, // 11: Bright Yellow
-    0xFF5555FF, // 12: Bright Blue
-    0xFFFF55FF, // 13: Bright Magenta
-    0xFF55FFFF, // 14: Bright Cyan
-    0xFFFFFFFF  // 15: Bright White
-};
-
 void render_terminal(const Terminal *term, uint32_t *pixels) {
     if (!term || !term->active) {
         return;
     }
 
-    // Calculate terminal position (centered on screen) - 50% bigger
-    int char_width = 12;  // Was 8, now 50% bigger
-    int char_height = 12; // Was 8, now 50% bigger
+    // Calculate terminal position (centered on screen) - 50% bigger with proper scaling
+    int char_width = 10;  // Slightly bigger, properly spaced
+    int char_height = 14; // Taller for better readability
     int term_pixel_width = TERM_COLS * char_width;
     int term_pixel_height = TERM_ROWS * char_height;
     int start_x = (SCREEN_WIDTH - term_pixel_width) / 2;
@@ -1108,7 +1131,7 @@ void render_terminal(const Terminal *term, uint32_t *pixels) {
     }
 
     // Draw help bar at top
-    const char *help_text = "TERMINAL MODE - Press ESC to exit and return to game";
+    const char *help_text = "TERMINAL MODE - Press F1 to exit and return to game";
     int help_x = (SCREEN_WIDTH - ((int)strlen(help_text) * 8)) / 2;
     draw_text(pixels, help_x, 10, help_text, pack_color(255, 255, 100));
 
@@ -1130,16 +1153,19 @@ void render_terminal(const Terminal *term, uint32_t *pixels) {
             }
             const unsigned char *bitmap = font8x8_basic[ch];
 
-            // Render 8x8 character
-            for (int cy = 0; cy < 8; cy++) {
-                for (int cx = 0; cx < 8; cx++) {
+            // Render character scaled to fit char_width x char_height
+            // Use simple nearest-neighbor scaling
+            for (int cy = 0; cy < char_height; cy++) {
+                int src_y = (cy * 8) / char_height;  // Map to 0-7
+                for (int cx = 0; cx < char_width; cx++) {
+                    int src_x = (cx * 8) / char_width;  // Map to 0-7
                     int screen_x = px + cx;
                     int screen_y = py + cy;
 
                     if (screen_x >= 0 && screen_x < SCREEN_WIDTH &&
                         screen_y >= 0 && screen_y < SCREEN_HEIGHT) {
 
-                        bool pixel_set = bitmap[cy] & (1 << cx);
+                        bool pixel_set = bitmap[src_y] & (1 << src_x);
                         uint32_t color = pixel_set ? fg_color : bg_color;
                         pixels[screen_y * SCREEN_WIDTH + screen_x] = color;
                     }
@@ -1155,11 +1181,12 @@ void render_terminal(const Terminal *term, uint32_t *pixels) {
         int px = start_x + term->cursor_x * char_width;
         int py = start_y + term->cursor_y * char_height;
 
-        // Blinking cursor (just draw a solid block for now)
-        uint32_t cursor_color = 0xFFFFFFFF; // White cursor
+        // Blinking cursor - draw underscore at bottom of cell
+        uint32_t cursor_color = 0xFFAAFFAA; // Light green cursor
 
-        for (int cy = 0; cy < 8; cy++) {
-            for (int cx = 0; cx < 8; cx++) {
+        int cursor_height = 2;  // Thin underscore
+        for (int cy = char_height - cursor_height; cy < char_height; cy++) {
+            for (int cx = 0; cx < char_width; cx++) {
                 int screen_x = px + cx;
                 int screen_y = py + cy;
 

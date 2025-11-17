@@ -107,8 +107,9 @@ int main(void) {
                 SDL_Keycode sym = event.key.keysym.sym;
 
                 // Terminal mode input handling
-                if (game.terminal_mode && !event.key.repeat) {
-                    if (sym == SDLK_ESCAPE) {
+                if (game.terminal_mode) {
+                    // F1 exits terminal mode (not ESC, so vim works)
+                    if (sym == SDLK_F1) {
                         game.terminal_mode = false;
                         game.active_terminal = -1;
                         continue;
@@ -117,28 +118,75 @@ int main(void) {
                         char buf[8];
                         size_t len = 0;
 
-                        if (sym == SDLK_RETURN) {
-                            buf[len++] = '\n';
-                        } else if (sym == SDLK_BACKSPACE) {
-                            buf[len++] = '\b';
-                        } else if (sym == SDLK_UP) {
-                            buf[len++] = '\033';
-                            buf[len++] = '[';
-                            buf[len++] = 'A';
-                        } else if (sym == SDLK_DOWN) {
-                            buf[len++] = '\033';
-                            buf[len++] = '[';
-                            buf[len++] = 'B';
-                        } else if (sym == SDLK_RIGHT) {
-                            buf[len++] = '\033';
-                            buf[len++] = '[';
-                            buf[len++] = 'C';
-                        } else if (sym == SDLK_LEFT) {
-                            buf[len++] = '\033';
-                            buf[len++] = '[';
-                            buf[len++] = 'D';
-                        } else if (sym == SDLK_TAB) {
-                            buf[len++] = '\t';
+                        SDL_Keymod mod = SDL_GetModState();
+                        bool ctrl = (mod & KMOD_CTRL) != 0;
+
+                        // Ctrl+key combinations
+                        if (ctrl) {
+                            if (sym >= SDLK_a && sym <= SDLK_z) {
+                                // Ctrl+A through Ctrl+Z
+                                buf[len++] = (char)(sym - SDLK_a + 1);
+                            } else if (sym == SDLK_LEFTBRACKET) {
+                                // Ctrl+[ = ESC
+                                buf[len++] = '\033';
+                            } else if (sym == SDLK_BACKSLASH) {
+                                // Ctrl+\ = FS
+                                buf[len++] = '\034';
+                            } else if (sym == SDLK_RIGHTBRACKET) {
+                                // Ctrl+] = GS
+                                buf[len++] = '\035';
+                            }
+                        } else {
+                            // Regular keys
+                            if (sym == SDLK_RETURN) {
+                                buf[len++] = '\n';
+                            } else if (sym == SDLK_BACKSPACE) {
+                                buf[len++] = '\b';
+                            } else if (sym == SDLK_ESCAPE) {
+                                buf[len++] = '\033';  // ESC now goes to terminal, not exits
+                            } else if (sym == SDLK_UP) {
+                                buf[len++] = '\033';
+                                buf[len++] = '[';
+                                buf[len++] = 'A';
+                            } else if (sym == SDLK_DOWN) {
+                                buf[len++] = '\033';
+                                buf[len++] = '[';
+                                buf[len++] = 'B';
+                            } else if (sym == SDLK_RIGHT) {
+                                buf[len++] = '\033';
+                                buf[len++] = '[';
+                                buf[len++] = 'C';
+                            } else if (sym == SDLK_LEFT) {
+                                buf[len++] = '\033';
+                                buf[len++] = '[';
+                                buf[len++] = 'D';
+                            } else if (sym == SDLK_TAB) {
+                                buf[len++] = '\t';
+                            } else if (sym == SDLK_DELETE) {
+                                // Delete key sequence
+                                buf[len++] = '\033';
+                                buf[len++] = '[';
+                                buf[len++] = '3';
+                                buf[len++] = '~';
+                            } else if (sym == SDLK_HOME) {
+                                buf[len++] = '\033';
+                                buf[len++] = '[';
+                                buf[len++] = 'H';
+                            } else if (sym == SDLK_END) {
+                                buf[len++] = '\033';
+                                buf[len++] = '[';
+                                buf[len++] = 'F';
+                            } else if (sym == SDLK_PAGEUP) {
+                                buf[len++] = '\033';
+                                buf[len++] = '[';
+                                buf[len++] = '5';
+                                buf[len++] = '~';
+                            } else if (sym == SDLK_PAGEDOWN) {
+                                buf[len++] = '\033';
+                                buf[len++] = '[';
+                                buf[len++] = '6';
+                                buf[len++] = '~';
+                            }
                         }
 
                         if (len > 0) {
