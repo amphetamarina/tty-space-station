@@ -590,25 +590,83 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
 
             // Render display walls with terminal content
             if (hitTile == 'D' || hitTile == 'd') {
-#if DEBUG_MODE
-                static int display_hit_counter = 0;
-                if (display_hit_counter % 120 == 0) {  // Log every 2 seconds
-                    printf("[DEBUG WALL] Hit display tile 'D' at map(%d,%d) x=%d y=%d\n",
-                           mapX, mapY, x, y);
-                }
-                display_hit_counter++;
-#endif
                 // Default to dark screen color
                 color = pack_color(10, 25, 35);
 
-                // SAFETY: Terminal rendering disabled to prevent illegal instruction crash
-                // The crash occurs when accessing terminal cell data during raycasting
-                // This needs further investigation - possibly memory alignment or race condition
+                // SAFETY: Extra bounds checking and validation to prevent crashes
+                if (mapX >= 0 && mapX < game->map.width && mapY >= 0 && mapY < game->map.height) {
+                    int display_idx = find_display_at(game, mapX, mapY);
 
-                // Find which display this is (for future implementation)
-                // int display_idx = find_display_at(game, mapX, mapY);
-                // TODO: Re-enable terminal rendering with proper safety checks
+                    if (display_idx >= 0 && display_idx < game->display_count && display_idx < MAX_DISPLAYS) {
+                        const DisplayEntry *disp = &game->displays[display_idx];
 
+                        if (disp->terminal_index >= 0 && disp->terminal_index < MAX_TERMINALS) {
+                            const Terminal *term = &game->terminals[disp->terminal_index];
+
+                            // SAFETY: Verify terminal is active and has valid PTY
+                            if (term && term->active && term->pty_fd >= 0) {
+                                // Map wall texture coordinates to terminal space
+                                int screenTexX = texX;
+                                int screenTexY = texY;
+
+                                // Border region (6 pixels each side)
+                                if (screenTexX >= 6 && screenTexX < TEX_SIZE - 6 &&
+                                    screenTexY >= 6 && screenTexY < TEX_SIZE - 6) {
+
+                                    int contentX = screenTexX - 6;
+                                    int contentY = screenTexY - 6;
+                                    int contentWidth = TEX_SIZE - 12;  // 52
+                                    int contentHeight = TEX_SIZE - 12;  // 52
+
+                                    // Map to terminal grid with bounds check
+                                    if (contentWidth > 0 && contentHeight > 0) {
+                                        int termX = (contentX * TERM_COLS) / contentWidth;
+                                        int termY = (contentY * TERM_ROWS) / contentHeight;
+
+                                        // SAFETY: Strict bounds check on terminal array access
+                                        if (termX >= 0 && termX < TERM_COLS && termY >= 0 && termY < TERM_ROWS) {
+                                            // Access terminal cell data
+                                            const TermCell *cell = &term->cells[termY][termX];
+
+                                            // Get character position within cell
+                                            int charWidth = contentWidth / TERM_COLS;
+                                            int charHeight = contentHeight / TERM_ROWS;
+
+                                            if (charWidth > 0 && charHeight > 0) {
+                                                int charPosX = contentX - (termX * charWidth);
+                                                int charPosY = contentY - (termY * charHeight);
+
+                                                // Map to 8x8 font bitmap with clamping
+                                                int fontX = (charPosX * 8) / charWidth;
+                                                int fontY = (charPosY * 8) / charHeight;
+                                                fontX = (fontX < 0) ? 0 : ((fontX > 7) ? 7 : fontX);
+                                                fontY = (fontY < 0) ? 0 : ((fontY > 7) ? 7 : fontY);
+
+                                                // Get character with safety check
+                                                unsigned char ch = (unsigned char)cell->ch;
+                                                if (ch < 32 || ch > 126) ch = ' ';
+
+                                                // SAFETY: Bounds check on font array
+                                                if (ch >= 0 && ch < 128) {
+                                                    const unsigned char *bitmap = font8x8_basic[ch];
+
+                                                    // Check pixel in bitmap
+                                                    bool pixel_set = bitmap[fontY] & (1 << fontX);
+
+                                                    // Get ANSI colors with mask
+                                                    uint32_t bg_color = ansi_colors[cell->bg_color & 0x0F];
+                                                    uint32_t fg_color = ansi_colors[cell->fg_color & 0x0F];
+
+                                                    color = pixel_set ? fg_color : bg_color;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             } else if (side == 1) {
                 color = blend_colors(color, pack_color(0, 0, 0), 0.3);
             }
