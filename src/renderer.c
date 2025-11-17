@@ -579,10 +579,73 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
             int texY = ((d * TEX_SIZE) / lineHeight) / 256;
             uint32_t color = wall_textures[texIndex][texY * TEX_SIZE + texX];
 
-            // Render display walls as dark screens (terminal text disabled to prevent crashes)
+            // Render display walls with terminal content
             if (hitTile == 'D' || hitTile == 'd') {
-                // Dark blue/teal display screen
+                // Find which display this is
+                int display_idx = find_display_at(game, mapX, mapY);
+                const Terminal *term = NULL;
+
+                if (display_idx >= 0 && display_idx < game->display_count) {
+                    const DisplayEntry *disp = &game->displays[display_idx];
+                    if (disp->terminal_index >= 0 && disp->terminal_index < MAX_TERMINALS) {
+                        term = &game->terminals[disp->terminal_index];
+                    }
+                }
+
+                // Default to dark screen color
                 color = pack_color(10, 25, 35);
+
+                // If we have an active terminal, render terminal content
+                if (term && term->active) {
+                    // Map the wall position to terminal coordinates
+                    // texX is 0-63 (TEX_SIZE), texY is the vertical position on the wall
+                    // We want to map the middle 80% of the wall to terminal content
+                    int screenTexX = texX;
+                    int screenTexY = texY;
+
+                    // Leave a border (6 pixels on each side like the sprite version)
+                    if (screenTexX >= 6 && screenTexX < TEX_SIZE - 6 &&
+                        screenTexY >= 6 && screenTexY < TEX_SIZE - 6) {
+
+                        int contentX = screenTexX - 6;
+                        int contentY = screenTexY - 6;
+                        int contentWidth = TEX_SIZE - 12;
+                        int contentHeight = TEX_SIZE - 12;
+
+                        // Map to terminal grid
+                        int termX = (contentX * TERM_COLS) / contentWidth;
+                        int termY = (contentY * TERM_ROWS) / contentHeight;
+
+                        if (termX >= 0 && termX < TERM_COLS && termY >= 0 && termY < TERM_ROWS) {
+                            const TermCell *cell = &term->cells[termY][termX];
+
+                            // Get position within character cell
+                            int charWidth = contentWidth / TERM_COLS;
+                            int charHeight = contentHeight / TERM_ROWS;
+                            int charPosX = contentX - (termX * charWidth);
+                            int charPosY = contentY - (termY * charHeight);
+
+                            // Map to 8x8 font
+                            int fontX = (charPosX * 8) / charWidth;
+                            int fontY = (charPosY * 8) / charHeight;
+                            fontX = fontX < 0 ? 0 : (fontX > 7 ? 7 : fontX);
+                            fontY = fontY < 0 ? 0 : (fontY > 7 ? 7 : fontY);
+
+                            // Get character bitmap
+                            unsigned char ch = (unsigned char)cell->ch;
+                            if (ch < 32 || ch > 126) ch = ' ';
+                            const unsigned char *bitmap = font8x8_basic[ch];
+
+                            // Check pixel in font
+                            bool pixel_set = bitmap[fontY] & (1 << fontX);
+
+                            // Use ANSI colors
+                            uint32_t bg_color = ansi_colors[cell->bg_color & 0x0F];
+                            uint32_t fg_color = ansi_colors[cell->fg_color & 0x0F];
+                            color = pixel_set ? fg_color : bg_color;
+                        }
+                    }
+                }
             } else if (side == 1) {
                 color = blend_colors(color, pack_color(0, 0, 0), 0.3);
             }
