@@ -5,6 +5,7 @@
 #include "map.h"
 #include "ui.h"
 #include "npc.h"
+#include "display.h"
 #include "../include/font8x8_basic.h"
 #include <math.h>
 #include <stdio.h>
@@ -678,8 +679,10 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
             // Map angle to texture X coordinate (wrapping horizontally)
             int skyX = (int)(columnAngle / (2.0 * M_PI) * SKY_TEXTURE_WIDTH) % SKY_TEXTURE_WIDTH;
 
-            // Map screen Y to texture Y coordinate (vertical gradient)
-            int skyY = (y * SKY_TEXTURE_HEIGHT) / (SCREEN_HEIGHT / 2);
+            // Map screen Y to texture Y coordinate - use only middle portion of texture to avoid stretching
+            // Map top of screen to middle of texture, stretch less
+            double skyV = (double)y / (double)(SCREEN_HEIGHT / 2);  // 0.0 at top, 1.0 at horizon
+            int skyY = (int)(skyV * SKY_TEXTURE_HEIGHT * 0.6);  // Only use 60% of texture height
             if (skyY >= SKY_TEXTURE_HEIGHT) skyY = SKY_TEXTURE_HEIGHT - 1;
 
             uint32_t skyColor = sky_texture[skyY * SKY_TEXTURE_WIDTH + skyX];
@@ -836,15 +839,63 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
         }
         int texIndex = tile_texture_index(hitTile);
 
+        // Check if this is a display wall - find the associated terminal
+        const Terminal *display_term = NULL;
+        if (hitTile == 'D' || hitTile == 'd') {
+            int disp_idx = find_display_at(game, mapX, mapY);
+            if (disp_idx >= 0 && disp_idx < game->display_count) {
+                const DisplayEntry *display = &game->displays[disp_idx];
+                int term_idx = display->terminal_index;
+                if (term_idx >= 0 && term_idx < MAX_TERMINALS && game->terminals[term_idx].active) {
+                    display_term = &game->terminals[term_idx];
+                }
+            }
+        }
+
         for (int y = drawStart; y <= drawEnd; ++y) {
             int d = y * 256 - SCREEN_HEIGHT * 128 + lineHeight * 128;
             int texY = ((d * TEX_SIZE) / lineHeight) / 256;
             uint32_t color = wall_textures[texIndex][texY * TEX_SIZE + texX];
-            if (hitTile == 'D') {
-                color = door_texture[texY * TEX_SIZE + texX];
+
+            // Render display walls with terminal content
+            if (hitTile == 'D' || hitTile == 'd') {
+                // Start with dark display background
+                color = pack_color(15, 20, 25);
+
+                // If we have an active terminal, render text
+                if (display_term) {
+                    // Map wall texture coordinates to terminal grid
+                    // Add border - use middle 80% of texture for text
+                    if (texX > TEX_SIZE * 0.1 && texX < TEX_SIZE * 0.9 &&
+                        texY > TEX_SIZE * 0.1 && texY < TEX_SIZE * 0.9) {
+
+                        int textAreaWidth = (int)(TEX_SIZE * 0.8);
+                        int textAreaHeight = (int)(TEX_SIZE * 0.8);
+                        int localX = texX - (int)(TEX_SIZE * 0.1);
+                        int localY = texY - (int)(TEX_SIZE * 0.1);
+
+                        // Map to terminal character grid
+                        int termX = (localX * TERM_COLS) / textAreaWidth;
+                        int termY = (localY * TERM_ROWS) / textAreaHeight;
+
+                        if (termX >= 0 && termX < TERM_COLS && termY >= 0 && termY < TERM_ROWS) {
+                            const TermCell *cell = &display_term->cells[termY][termX];
+
+                            // Simple text rendering - show characters as colored blocks
+                            if (cell->ch > 32 && cell->ch < 127) {
+                                // Character present - use bright color
+                                color = pack_color(200, 220, 200);
+                            }
+                        }
+                    } else {
+                        // Border area - darker frame
+                        color = pack_color(30, 35, 40);
+                    }
+                }
             } else if (side == 1) {
                 color = blend_colors(color, pack_color(0, 0, 0), 0.3);
             }
+
             if (hitTile == '4') {
                 double t = lineHeight > 0 ? ((double)(y - drawStart) / (double)lineHeight) : 0.0;
                 double alpha = (t < 0.4) ? 0.65 : 0.35;
@@ -877,7 +928,9 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
     int furnitureHighlight = render_furniture(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
     int npcHighlight = render_npcs(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
     int cabinetHighlight = render_cabinets(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
-    int displayHighlight = render_displays(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
+    // Displays are now rendered as walls, not sprites
+    // int displayHighlight = render_displays(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
+    int displayHighlight = -1; // TODO: Implement wall-based display highlighting
     render_memory_plaques(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
 
     int crossX = SCREEN_WIDTH / 2;
@@ -1041,9 +1094,9 @@ void render_terminal(const Terminal *term, uint32_t *pixels) {
         return;
     }
 
-    // Calculate terminal position (centered on screen)
-    int char_width = 8;
-    int char_height = 8;
+    // Calculate terminal position (centered on screen) - 50% bigger
+    int char_width = 12;  // Was 8, now 50% bigger
+    int char_height = 12; // Was 8, now 50% bigger
     int term_pixel_width = TERM_COLS * char_width;
     int term_pixel_height = TERM_ROWS * char_height;
     int start_x = (SCREEN_WIDTH - term_pixel_width) / 2;

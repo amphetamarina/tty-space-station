@@ -21,8 +21,8 @@ void rebuild_displays(Game *game) {
 
     for (int y = 0; y < game->map.height; ++y) {
         for (int x = 0; x < game->map.width; ++x) {
-            char marker = game->map.decor[y][x];
-            if (marker == 'D' || marker == 'd') {
+            char tile = game->map.tiles[y][x];
+            if (tile == 'D' || tile == 'd') {
                 if (game->display_count >= MAX_DISPLAYS) {
 #if DEBUG_MODE
                     printf("[DEBUG] Maximum displays (%d) reached, skipping display at (%d,%d)\n",
@@ -31,37 +31,37 @@ void rebuild_displays(Game *game) {
                     continue;
                 }
 
-                // Find adjacent wall to determine normal direction
+                // Display IS a wall - determine orientation based on adjacent floor tiles
                 double normal_x = 0;
                 double normal_y = 0;
-                bool found_wall = false;
+                bool has_orientation = false;
 
-                // Check cardinal directions for walls
-                if (x > 0 && game->map.tiles[y][x - 1] == '1') {
-                    // Wall to the left, display faces right
-                    normal_x = 1.0;
-                    normal_y = 0.0;
-                    found_wall = true;
-                } else if (x < game->map.width - 1 && game->map.tiles[y][x + 1] == '1') {
-                    // Wall to the right, display faces left
+                // Check which side has floor/open space - display faces that direction
+                if (x > 0 && (game->map.tiles[y][x - 1] == '.' || game->map.tiles[y][x - 1] == 'S')) {
+                    // Open space to the left, display faces left
                     normal_x = -1.0;
                     normal_y = 0.0;
-                    found_wall = true;
-                } else if (y > 0 && game->map.tiles[y - 1][x] == '1') {
-                    // Wall above, display faces down
-                    normal_x = 0.0;
-                    normal_y = 1.0;
-                    found_wall = true;
-                } else if (y < game->map.height - 1 && game->map.tiles[y + 1][x] == '1') {
-                    // Wall below, display faces up
+                    has_orientation = true;
+                } else if (x < game->map.width - 1 && (game->map.tiles[y][x + 1] == '.' || game->map.tiles[y][x + 1] == 'S')) {
+                    // Open space to the right, display faces right
+                    normal_x = 1.0;
+                    normal_y = 0.0;
+                    has_orientation = true;
+                } else if (y > 0 && (game->map.tiles[y - 1][x] == '.' || game->map.tiles[y - 1][x] == 'S')) {
+                    // Open space above, display faces up
                     normal_x = 0.0;
                     normal_y = -1.0;
-                    found_wall = true;
+                    has_orientation = true;
+                } else if (y < game->map.height - 1 && (game->map.tiles[y + 1][x] == '.' || game->map.tiles[y + 1][x] == 'S')) {
+                    // Open space below, display faces down
+                    normal_x = 0.0;
+                    normal_y = 1.0;
+                    has_orientation = true;
                 }
 
-                if (!found_wall) {
+                if (!has_orientation) {
 #if DEBUG_MODE
-                    printf("[DEBUG] Display at (%d,%d) has no adjacent wall, skipping\n", x, y);
+                    printf("[DEBUG] Display at (%d,%d) has no adjacent open space, skipping\n", x, y);
 #endif
                     continue;
                 }

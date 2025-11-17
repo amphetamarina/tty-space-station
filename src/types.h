@@ -202,14 +202,16 @@ typedef struct {
 
 // Display types (wall-mounted monitors)
 typedef struct {
-    int grid_x;
+    int grid_x;      // Starting grid position (top-left)
     int grid_y;
-    double x;
+    double x;        // World position (center)
     double y;
     double normal_x;  // Wall normal direction
     double normal_y;
     const char *name;
     int terminal_index;  // Index into game terminals array
+    int width;       // Number of tiles wide (for stacked displays)
+    int height;      // Number of tiles tall (for stacked displays)
 } DisplayEntry;
 
 typedef struct {

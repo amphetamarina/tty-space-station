@@ -276,11 +276,10 @@ void map_store_char(Map *map, int x, int y, char raw) {
         printf("[DEBUG] Cabinet marker '%c' stored at decor[%d][%d]\n", tile, y, x);
 #endif
     } else if (tile == 'D' || tile == 'd') {
-        // Display decor characters
-        map->decor[y][x] = tile;
-        map->tiles[y][x] = '.';
+        // Display wall tiles - keep as wall, not decor
+        map->tiles[y][x] = tile;
 #if DEBUG_MODE
-        printf("[DEBUG] Display marker '%c' stored at decor[%d][%d]\n", tile, y, x);
+        printf("[DEBUG] Display wall '%c' stored at tiles[%d][%d]\n", tile, y, x);
 #endif
     } else {
         map->tiles[y][x] = tile;
