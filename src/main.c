@@ -148,7 +148,12 @@ int main(void) {
                             CabinetEntry *cabinet = &game.cabinets[game.rename_cabinet_index];
                             set_cabinet_custom_name(cabinet, game.rename_buffer);
                             set_cabinet_custom_color(cabinet, get_cabinet_color_by_index(game.rename_color_index));
-                            set_hud_message(&game, "Cabinet renamed!");
+
+                            // Show the new name in confirmation message
+                            char msg[128];
+                            const char *new_name = get_cabinet_display_name(cabinet);
+                            snprintf(msg, sizeof(msg), "Renamed to: %s", new_name);
+                            set_hud_message(&game, msg);
                         }
                         game.rename_mode = false;
                         game.rename_cabinet_index = -1;
