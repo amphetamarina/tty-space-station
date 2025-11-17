@@ -11,7 +11,7 @@ extern uint32_t floor_textures[NUM_FLOOR_TEXTURES][TEX_SIZE * TEX_SIZE];
 extern uint32_t ceiling_textures[NUM_CEIL_TEXTURES][TEX_SIZE * TEX_SIZE];
 extern uint32_t door_texture[TEX_SIZE * TEX_SIZE];
 extern uint32_t furniture_textures[NUM_FURNITURE_TYPES][TEX_SIZE * TEX_SIZE];
-extern uint32_t cabinet_texture[TEX_SIZE * TEX_SIZE];
+extern uint32_t cabinet_textures[NUM_CABINET_TEXTURES][TEX_SIZE * TEX_SIZE];
 extern uint32_t sky_texture[SKY_TEXTURE_HEIGHT * SKY_TEXTURE_WIDTH];
 extern uint32_t display_texture[TEX_SIZE * TEX_SIZE];
 

@@ -2,6 +2,7 @@
 #include "cabinet.h"
 #include "terminal.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 void rebuild_cabinets(Game *game) {
@@ -36,6 +37,7 @@ void rebuild_cabinets(Game *game) {
                 entry->y = y + 0.5;
                 entry->name = "Server Cabinet";
                 entry->terminal_index = game->cabinet_count; // Each cabinet gets its own terminal
+                entry->texture_index = rand() % NUM_CABINET_TEXTURES; // Random texture variation
 
                 // Initialize the corresponding terminal
                 if (entry->terminal_index < MAX_TERMINALS) {

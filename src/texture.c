@@ -10,7 +10,7 @@ uint32_t floor_textures[NUM_FLOOR_TEXTURES][TEX_SIZE * TEX_SIZE];
 uint32_t ceiling_textures[NUM_CEIL_TEXTURES][TEX_SIZE * TEX_SIZE];
 uint32_t door_texture[TEX_SIZE * TEX_SIZE];
 uint32_t furniture_textures[NUM_FURNITURE_TYPES][TEX_SIZE * TEX_SIZE];
-uint32_t cabinet_texture[TEX_SIZE * TEX_SIZE];
+uint32_t cabinet_textures[NUM_CABINET_TEXTURES][TEX_SIZE * TEX_SIZE];
 uint32_t sky_texture[SKY_TEXTURE_HEIGHT * SKY_TEXTURE_WIDTH];
 uint32_t display_texture[TEX_SIZE * TEX_SIZE];
 
@@ -93,32 +93,55 @@ void generate_furniture_textures(void) {
 }
 
 void generate_cabinet_texture(void) {
-    // Server cabinet - dark metallic look with panel details
-    uint32_t metal = pack_color(60, 60, 80);
-    uint32_t panel = pack_color(40, 40, 50);
-    uint32_t light = pack_color(80, 180, 100);  // Green indicator lights
+    // Generate 4 cabinet texture variations
+    for (int t = 0; t < NUM_CABINET_TEXTURES; ++t) {
+        // Different color schemes for each variation
+        uint32_t metal, panel, light;
+        if (t == 0) {
+            // Blue-gray metallic
+            metal = pack_color(60, 60, 80);
+            panel = pack_color(40, 40, 50);
+            light = pack_color(80, 180, 100);  // Green lights
+        } else if (t == 1) {
+            // Darker gunmetal
+            metal = pack_color(50, 55, 60);
+            panel = pack_color(30, 33, 36);
+            light = pack_color(200, 100, 80);  // Orange lights
+        } else if (t == 2) {
+            // Lighter silver
+            metal = pack_color(80, 80, 90);
+            panel = pack_color(60, 60, 70);
+            light = pack_color(100, 150, 250);  // Blue lights
+        } else {
+            // Bronze-tinted
+            metal = pack_color(70, 65, 55);
+            panel = pack_color(50, 45, 35);
+            light = pack_color(255, 200, 80);  // Yellow lights
+        }
 
-    for (int y = 0; y < TEX_SIZE; ++y) {
-        for (int x = 0; x < TEX_SIZE; ++x) {
-            uint32_t color = metal;
+        for (int y = 0; y < TEX_SIZE; ++y) {
+            for (int x = 0; x < TEX_SIZE; ++x) {
+                uint32_t color = metal;
 
-            // Panel sections
-            if (y % 16 < 2) {
-                color = panel;
+                // Panel sections (vary pattern per texture)
+                if (y % 16 < 2) {
+                    color = panel;
+                }
+
+                // Indicator lights (vary position per texture)
+                int lightX = TEX_SIZE / 4 + t * 4;
+                if (x > lightX && x < lightX + 3 && y % 16 == 8) {
+                    color = light;
+                }
+
+                // Metallic grain
+                double noise = ((x * 7 + y * 11) % 13) / 13.0;
+                uint8_t r = (uint8_t)(((color >> 16) & 0xFF) * (0.9 + noise * 0.1));
+                uint8_t g = (uint8_t)(((color >> 8) & 0xFF) * (0.9 + noise * 0.1));
+                uint8_t b = (uint8_t)((color & 0xFF) * (0.9 + noise * 0.1));
+
+                cabinet_textures[t][y * TEX_SIZE + x] = pack_color(r, g, b);
             }
-
-            // Indicator lights (small green dots)
-            if (x > TEX_SIZE / 4 && x < TEX_SIZE / 4 + 3 && y % 16 == 8) {
-                color = light;
-            }
-
-            // Metallic grain
-            double noise = ((x * 7 + y * 11) % 13) / 13.0;
-            uint8_t r = (uint8_t)(((color >> 16) & 0xFF) * (0.9 + noise * 0.1));
-            uint8_t g = (uint8_t)(((color >> 8) & 0xFF) * (0.9 + noise * 0.1));
-            uint8_t b = (uint8_t)((color & 0xFF) * (0.9 + noise * 0.1));
-
-            cabinet_texture[y * TEX_SIZE + x] = pack_color(r, g, b);
         }
     }
 }
@@ -259,8 +282,10 @@ void load_custom_textures(void) {
         snprintf(path, sizeof(path), "assets/textures/%s", spec->asset);
         load_texture_from_bmp(path, furniture_textures[i]);
     }
-    snprintf(path, sizeof(path), "assets/textures/cabinet.bmp");
-    load_texture_from_bmp(path, cabinet_texture);
+    for (int i = 0; i < NUM_CABINET_TEXTURES; ++i) {
+        snprintf(path, sizeof(path), "assets/textures/cabinet%d.bmp", i);
+        load_texture_from_bmp(path, cabinet_textures[i]);
+    }
     snprintf(path, sizeof(path), "assets/textures/sky.bmp");
     load_sky_texture_from_bmp(path);
     snprintf(path, sizeof(path), "assets/textures/display.bmp");

@@ -1,6 +1,7 @@
 // Display management module - wall-mounted monitors
 #define _POSIX_C_SOURCE 200809L
 #include "display.h"
+#include "terminal.h"
 #include "utils.h"
 #include <stdio.h>
 #include <string.h>
@@ -107,4 +108,31 @@ int find_display_at(const Game *game, int grid_x, int grid_y) {
         }
     }
     return -1;
+}
+
+void activate_display(Game *game, int display_index) {
+    if (display_index < 0 || display_index >= game->display_count) {
+        return;
+    }
+
+    const DisplayEntry *display = &game->displays[display_index];
+    int term_idx = display->terminal_index;
+
+    if (term_idx < 0 || term_idx >= MAX_TERMINALS) {
+        return;
+    }
+
+    Terminal *term = &game->terminals[term_idx];
+
+    // Initialize terminal if not already active
+    if (!term->active) {
+        if (!terminal_spawn_shell(term)) {
+            fprintf(stderr, "Failed to spawn shell for display\n");
+            return;
+        }
+    }
+
+    // Enter terminal mode
+    game->terminal_mode = true;
+    game->active_terminal = term_idx;
 }

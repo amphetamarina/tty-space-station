@@ -431,7 +431,9 @@ int render_cabinets(const Game *game, uint32_t *pixels, double dirX, double dirY
                     double texYf = (double)(y - drawStartY) / (double)wallHeight;
                     int texY = (int)(texYf * TEX_SIZE) & (TEX_SIZE - 1);
 
-                    uint32_t color = cabinet_texture[texY * TEX_SIZE + texX];
+                    // Use cabinet's texture variation
+                    int texIdx = entry->texture_index % NUM_CABINET_TEXTURES;
+                    uint32_t color = cabinet_textures[texIdx][texY * TEX_SIZE + texX];
 
                     // Darken side faces for depth perception
                     if (hitFace == 1 || hitFace == 3) {
@@ -463,12 +465,27 @@ int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY
     for (int i = 0; i < count; ++i) {
         const DisplayEntry *display = &game->displays[i];
 
-        // Position display slightly offset from wall based on normal
-        double worldX = display->x + display->normal_x * 0.1;
-        double worldY = display->y + display->normal_y * 0.1;
+        // Check if display is facing the player (dot product with view direction)
+        double toPlayerX = player->x - display->x;
+        double toPlayerY = player->y - display->y;
+        double dotProduct = display->normal_x * toPlayerX + display->normal_y * toPlayerY;
 
-        double relX = worldX - player->x;
-        double relY = worldY - player->y;
+        // Only render if player is in front of display (display faces player)
+        if (dotProduct <= 0.0) {
+            continue;
+        }
+
+        // Display center position (offset slightly from wall)
+        double centerX = display->x + display->normal_x * 0.05;
+        double centerY = display->y + display->normal_y * 0.05;
+
+        // Display dimensions in world space
+        double halfWidth = 0.4;
+        double halfHeight = 0.3;
+
+        // Project center to screen for bounds check
+        double relX = centerX - player->x;
+        double relY = centerY - player->y;
         double invDet = 1.0 / (planeX * dirY - dirX * planeY);
         double transformX = invDet * (dirY * relX - dirX * relY);
         double transformY = invDet * (-planeY * relX + planeX * relY);
@@ -477,26 +494,23 @@ int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY
             continue;
         }
 
-        int spriteScreenX = (int)((SCREEN_WIDTH / 2) * (1 + transformX / transformY));
+        // Simple billboard rendering for displays (flat, axis-aligned)
+        int screenCenterX = (int)((SCREEN_WIDTH / 2) * (1 + transformX / transformY));
+        int screenWidth = abs((int)((SCREEN_HEIGHT / transformY) * halfWidth * 2));
+        int screenHeight = abs((int)((SCREEN_HEIGHT / transformY) * halfHeight * 2));
 
-        // Display dimensions
-        double worldWidth = 0.6;
-        double worldHeight = 0.5;
-        int spriteHeight = abs((int)((SCREEN_HEIGHT / transformY) * worldHeight));
-        int spriteWidth = abs((int)((SCREEN_HEIGHT / transformY) * worldWidth));
+        if (screenWidth < 4) screenWidth = 4;
+        if (screenHeight < 4) screenHeight = 4;
 
-        if (spriteHeight < 4) spriteHeight = 4;
-        if (spriteWidth < 4) spriteWidth = 4;
+        int drawStartX = screenCenterX - screenWidth / 2;
+        int drawEndX = screenCenterX + screenWidth / 2;
+        int drawStartY = SCREEN_HEIGHT / 2 - screenHeight / 2;
+        int drawEndY = SCREEN_HEIGHT / 2 + screenHeight / 2;
 
-        int drawStartY = -spriteHeight / 2 + SCREEN_HEIGHT / 2;
-        int drawEndY = spriteHeight / 2 + SCREEN_HEIGHT / 2;
-        if (drawStartY < 0) drawStartY = 0;
-        if (drawEndY >= SCREEN_HEIGHT) drawEndY = SCREEN_HEIGHT - 1;
-
-        int drawStartX = -spriteWidth / 2 + spriteScreenX;
-        int drawEndX = spriteWidth / 2 + spriteScreenX;
         if (drawStartX < 0) drawStartX = 0;
         if (drawEndX >= SCREEN_WIDTH) drawEndX = SCREEN_WIDTH - 1;
+        if (drawStartY < 0) drawStartY = 0;
+        if (drawEndY >= SCREEN_HEIGHT) drawEndY = SCREEN_HEIGHT - 1;
 
         if (drawStartX >= drawEndX || drawStartY >= drawEndY) {
             continue;
@@ -505,7 +519,7 @@ int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY
         // Check for crosshair hit
         if (crossX >= drawStartX && crossX <= drawEndX &&
             crossY >= drawStartY && crossY <= drawEndY) {
-            if (transformY < zbuffer[crossX] && transformY < highlightDepth) {
+            if (transformY < highlightDepth) {
                 highlightDepth = transformY;
                 highlight = i;
             }
@@ -518,20 +532,20 @@ int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY
         }
 
         // Render the display
-        for (int stripe = drawStartX; stripe <= drawEndX; ++stripe) {
-            if (stripe < 0 || stripe >= SCREEN_WIDTH) continue;
-            if (transformY >= zbuffer[stripe]) continue;
+        for (int y = drawStartY; y <= drawEndY; ++y) {
+            if (y < 0 || y >= SCREEN_HEIGHT) continue;
 
-            int texX = (int)((double)(stripe - drawStartX) / (double)(spriteWidth ? spriteWidth : 1) * TEX_SIZE);
-            if (texX < 0) texX = 0;
-            if (texX >= TEX_SIZE) texX = TEX_SIZE - 1;
+            int texY = (int)((double)(y - drawStartY) / (double)screenHeight * TEX_SIZE);
+            if (texY < 0) texY = 0;
+            if (texY >= TEX_SIZE) texY = TEX_SIZE - 1;
 
-            for (int y = drawStartY; y <= drawEndY; ++y) {
-                if (y < 0 || y >= SCREEN_HEIGHT) continue;
+            for (int x = drawStartX; x <= drawEndX; ++x) {
+                if (x < 0 || x >= SCREEN_WIDTH) continue;
+                if (transformY >= zbuffer[x]) continue;
 
-                int texY = (int)((double)(y - drawStartY) / (double)(spriteHeight ? spriteHeight : 1) * TEX_SIZE);
-                if (texY < 0) texY = 0;
-                if (texY >= TEX_SIZE) texY = TEX_SIZE - 1;
+                int texX = (int)((double)(x - drawStartX) / (double)screenWidth * TEX_SIZE);
+                if (texX < 0) texX = 0;
+                if (texX >= TEX_SIZE) texX = TEX_SIZE - 1;
 
                 uint32_t color = display_texture[texY * TEX_SIZE + texX];
 
@@ -540,11 +554,11 @@ int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY
                     // Map texture coordinates to terminal character grid
                     int screenTexX = texX - 6;
                     int screenTexY = texY - 6;
-                    int screenWidth = TEX_SIZE - 12;
-                    int screenHeight = TEX_SIZE - 12;
+                    int screenWidthTex = TEX_SIZE - 12;
+                    int screenHeightTex = TEX_SIZE - 12;
 
-                    int termX = (screenTexX * TERM_COLS) / screenWidth;
-                    int termY = (screenTexY * TERM_ROWS) / screenHeight;
+                    int termX = (screenTexX * TERM_COLS) / screenWidthTex;
+                    int termY = (screenTexY * TERM_ROWS) / screenHeightTex;
 
                     if (termX >= 0 && termX < TERM_COLS && termY >= 0 && termY < TERM_ROWS) {
                         const TermCell *cell = &term->cells[termY][termX];
@@ -565,7 +579,7 @@ int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY
                     color = blend_colors(color, pack_color(255, 255, 100), 0.25);
                 }
 
-                draw_pixel(pixels, stripe, y, color);
+                draw_pixel(pixels, x, y, color);
             }
         }
     }

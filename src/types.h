@@ -33,6 +33,7 @@
 #define NUM_WALL_TEXTURES 4
 #define NUM_FLOOR_TEXTURES 3
 #define NUM_CEIL_TEXTURES 2
+#define NUM_CABINET_TEXTURES 4
 #define MAX_LAYOUT_LINES 32
 #define INPUT_MAX_LINES 10
 
@@ -196,6 +197,7 @@ typedef struct {
     double y;
     const char *name;
     int terminal_index;  // Index into game terminals array
+    int texture_index;   // Which cabinet texture variation to use (0-3)
 } CabinetEntry;
 
 // Display types (wall-mounted monitors)

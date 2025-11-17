@@ -8,6 +8,7 @@
 #include "renderer.h"
 #include "npc.h"
 #include "cabinet.h"
+#include "display.h"
 #include "terminal.h"
 #include <SDL2/SDL.h>
 #include <stdio.h>
@@ -208,7 +209,21 @@ int main(void) {
                         } else {
                             set_hud_message(&game, "Aim at a memory plaque to view it.");
                         }
-                    } else if (sym == SDLK_n || sym == SDLK_e) {
+                    } else if (sym == SDLK_e) {
+                        // E key: Check for display first, then NPC
+                        double rayX = game.player.x + cos(game.player.angle) * 1.5;
+                        double rayY = game.player.y + sin(game.player.angle) * 1.5;
+                        int gx = (int)rayX;
+                        int gy = (int)rayY;
+
+                        int disp_idx = find_display_at(&game, gx, gy);
+                        if (disp_idx >= 0) {
+                            activate_display(&game, disp_idx);
+                        } else {
+                            // No display found, try NPC interaction
+                            interact_with_npc(&game);
+                        }
+                    } else if (sym == SDLK_n) {
                         interact_with_npc(&game);
                     } else if (sym == SDLK_u) {
                         // Activate cabinet - find cabinet player is facing
