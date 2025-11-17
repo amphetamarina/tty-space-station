@@ -16,5 +16,6 @@ int layout_text_lines(const char *text, int chars_per_line, char lines[][MAX_LAY
 
 // UI rendering functions
 void render_minimap(uint32_t *pixels, const Game *game);
+void render_hud(uint32_t *pixels, const Game *game);
 
 #endif // UI_H

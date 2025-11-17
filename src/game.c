@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <SDL2/SDL.h>
 
 int game_allocate_game_maps(Game *game, int width, int height) {
@@ -83,6 +84,15 @@ void game_pick_spawn(Game *game) {
 void game_init(Game *game) {
     memset(game, 0, sizeof(*game));
 
+    game->hud_status.shells = 0;
+    game->hud_status.active_tool = HUD_TOOL_KEYBOARD;
+    game->hud_status.face_state = 0;
+    for (int i = 0; i < NUM_HUD_TOOLS; ++i) {
+        game->hud_status.tools[i] = 1;
+    }
+    game->hud_bob_phase = 0.0;
+    game->hud_bob_offset = 0.0;
+
     // Initialize pointers to NULL
     game->map.tiles = NULL;
     game->map.decor = NULL;
@@ -115,6 +125,46 @@ void game_init(Game *game) {
     game_init_terminals(game);
     rebuild_cabinets(game);
     rebuild_displays(game);
+}
+
+void game_update_hud_status(Game *game) {
+    if (!game) {
+        return;
+    }
+    int active_shells = 0;
+    for (int i = 0; i < MAX_TERMINALS; ++i) {
+        if (game->terminals[i].active) {
+            active_shells++;
+        }
+    }
+    game->hud_status.shells = active_shells;
+
+    if (active_shells == 0) {
+        game->hud_status.face_state = 2;
+    } else if (active_shells > 4) {
+        game->hud_status.face_state = 1;
+    } else {
+        game->hud_status.face_state = 0;
+    }
+}
+
+void game_update_hud_bob(Game *game, bool moving, double delta) {
+    if (!game) {
+        return;
+    }
+    double phase_speed = moving ? 8.0 : 4.0;
+    game->hud_bob_phase += delta * phase_speed;
+    if (game->hud_bob_phase > M_PI * 2.0) {
+        game->hud_bob_phase = fmod(game->hud_bob_phase, M_PI * 2.0);
+    }
+    double amplitude = moving ? 14.0 : 2.0;
+    double desired = sin(game->hud_bob_phase) * amplitude;
+    double response = moving ? 8.0 : 4.0;
+    double t = delta * response;
+    if (t > 1.0) {
+        t = 1.0;
+    }
+    game->hud_bob_offset += (desired - game->hud_bob_offset) * t;
 }
 
 void set_hud_message(Game *game, const char *msg) {

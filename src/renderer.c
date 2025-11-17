@@ -576,16 +576,7 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
     }
 
     render_minimap(pixels, game);
-    draw_text(pixels, 20, SCREEN_HEIGHT - 60,
-              "Controls: WASD move, QE strafe, Arrows rotate, ESC quit",
-              pack_color(255, 255, 255));
-    char pos[128];
-    snprintf(pos, sizeof(pos), "Position (%.1f, %.1f)", player->x, player->y);
-    draw_text(pixels, 20, SCREEN_HEIGHT - 40, pos, pack_color(200, 200, 200));
-
-    if (game->hud_message_timer > 0.0 && game->hud_message[0]) {
-        draw_text(pixels, 20, SCREEN_HEIGHT - 80, game->hud_message, pack_color(250, 210, 140));
-    }
+    render_hud(pixels, game);
 }
 
 void render_terminal(const Terminal *term, uint32_t *pixels) {

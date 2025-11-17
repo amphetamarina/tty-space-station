@@ -8,5 +8,7 @@ void rebuild_cabinets(Game *game);
 bool cabinet_blocks_position(const Game *game, double x, double y);
 int find_cabinet_at(const Game *game, int gx, int gy);
 void activate_cabinet(Game *game, int cabinet_index);
+bool remove_cabinet(Game *game, int cabinet_index);
+bool place_cabinet(Game *game, int gx, int gy);
 
 #endif // CABINET_H

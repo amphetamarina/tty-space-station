@@ -184,7 +184,15 @@ Drop optional 64×64 BMP textures into `assets/textures/` to override procedural
 **Sky:**
 - `sky.bmp` (512×128 cylindrical panorama)
 
-Missing files fall back to built-in procedural generation.
+**HUD (optional, any resolution):** Place in `assets/hud/`
+- `face.bmp` - overrides the HUD face tile
+- `hand.bmp` - replaces the weapon/hand overlay
+- `keyboard.bmp`, `axe.bmp`, `cabinet.bmp` - replace the corresponding tool icons
+  - Use 32-bit BMP files with an alpha channel for transparent areas (recommended). If your art tool cannot export alpha, fill the background with bright magenta (`#FF00FF`); the HUD loader treats that color as transparent, Doom-style.
+  - Example alpha export with ImageMagick: `convert hud.png -alpha on -depth 8 BMP32:assets/hud/hand.bmp`
+  - Example color-key workflow: paint the transparent regions with #FF00FF before exporting to BMP and the loader will skip those pixels automatically: `magick hand.png -background "#FF00FF" -alpha remove hand.png`
+
+Missing files fall back to built-in procedural generation or primitive HUD art.
 
 ### Texture Resources
 

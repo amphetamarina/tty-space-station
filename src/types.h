@@ -33,6 +33,7 @@
 #define NUM_CEIL_TEXTURES 2
 #define NUM_CABINET_TEXTURES 4
 #define MAX_LAYOUT_LINES 32
+#define NUM_HUD_TOOLS 3
 
 #define MAP_FILE_DEFAULT "maps/palace.map"
 
@@ -104,6 +105,19 @@ typedef struct {
     int csi_buffer_len;
 } Terminal;
 
+typedef enum {
+    HUD_TOOL_KEYBOARD = 0,
+    HUD_TOOL_AXE = 1,
+    HUD_TOOL_DEPLOY = 2
+} HudToolType;
+
+typedef struct {
+    int shells;                     // active shell sessions
+    int active_tool;                // HudToolType index
+    int tools[NUM_HUD_TOOLS];       // availability flags or remaining charges
+    int face_state;                 // reserved for subtle feedback cues
+} HudStatus;
+
 // Cabinet types
 typedef enum {
     CABINET_SERVER = 0,
@@ -148,6 +162,9 @@ typedef struct {
     bool terminal_mode;
     int active_terminal;  // Which terminal is currently being viewed
     int skip_display_frames;  // Skip display rendering for N frames after exit
+    HudStatus hud_status;
+    double hud_bob_phase;
+    double hud_bob_offset;
 } Game;
 
 #endif // TYPES_H

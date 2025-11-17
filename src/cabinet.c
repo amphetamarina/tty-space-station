@@ -1,9 +1,26 @@
 // Cabinet management module
 #include "cabinet.h"
 #include "terminal.h"
+#include "map.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static int find_free_terminal_slot(const Game *game) {
+    bool used[MAX_TERMINALS] = {0};
+    for (int i = 0; i < game->cabinet_count; ++i) {
+        int idx = game->cabinets[i].terminal_index;
+        if (idx >= 0 && idx < MAX_TERMINALS) {
+            used[idx] = true;
+        }
+    }
+    for (int i = 0; i < MAX_TERMINALS; ++i) {
+        if (!used[i]) {
+            return i;
+        }
+    }
+    return -1;
+}
 
 void rebuild_cabinets(Game *game) {
     game->cabinet_count = 0;
@@ -36,7 +53,10 @@ void rebuild_cabinets(Game *game) {
                 entry->x = x + 0.5;
                 entry->y = y + 0.5;
                 entry->name = "Server Cabinet";
-                entry->terminal_index = game->cabinet_count; // Each cabinet gets its own terminal
+                entry->terminal_index = find_free_terminal_slot(game);
+                if (entry->terminal_index < 0) {
+                    continue;
+                }
                 entry->texture_index = rand() % NUM_CABINET_TEXTURES; // Random texture variation
 
                 // Initialize the corresponding terminal
@@ -124,4 +144,77 @@ void activate_cabinet(Game *game, int cabinet_index) {
     // Enter terminal mode
     game->terminal_mode = true;
     game->active_terminal = term_idx;
+}
+
+bool remove_cabinet(Game *game, int cabinet_index) {
+    if (!game || cabinet_index < 0 || cabinet_index >= game->cabinet_count) {
+        return false;
+    }
+
+    CabinetEntry *entry = &game->cabinets[cabinet_index];
+    if (entry->grid_y >= 0 && entry->grid_y < game->map.height &&
+        entry->grid_x >= 0 && entry->grid_x < game->map.width &&
+        game->map.decor && game->map.decor[entry->grid_y]) {
+        game->map.decor[entry->grid_y][entry->grid_x] = '\0';
+    }
+
+    if (entry->terminal_index >= 0 && entry->terminal_index < MAX_TERMINALS) {
+        Terminal *term = &game->terminals[entry->terminal_index];
+        if (term->active) {
+            terminal_close(term);
+        }
+        terminal_init(term);
+    }
+
+    for (int i = cabinet_index; i < game->cabinet_count - 1; ++i) {
+        game->cabinets[i] = game->cabinets[i + 1];
+    }
+    game->cabinet_count--;
+    return true;
+}
+
+bool place_cabinet(Game *game, int gx, int gy) {
+    if (!game || !game->map.tiles || !game->map.decor) {
+        return false;
+    }
+    if (gx < 0 || gy < 0 || gx >= game->map.width || gy >= game->map.height) {
+        return false;
+    }
+    if (game->cabinet_count >= MAX_CABINETS) {
+        return false;
+    }
+    char tile = game->map.tiles[gy][gx];
+    if (tile_is_wall(tile) || tile == 'D' || tile == 'd') {
+        return false;
+    }
+    if (find_cabinet_at(game, gx, gy) >= 0) {
+        return false;
+    }
+
+    double cx = gx + 0.5;
+    double cy = gy + 0.5;
+    double dx = game->player.x - cx;
+    double dy = game->player.y - cy;
+    if ((dx * dx + dy * dy) < 0.4) {
+        return false;
+    }
+
+    int terminal_slot = find_free_terminal_slot(game);
+    if (terminal_slot < 0) {
+        return false;
+    }
+
+    CabinetEntry *entry = &game->cabinets[game->cabinet_count];
+    entry->type = CABINET_SERVER;
+    entry->grid_x = gx;
+    entry->grid_y = gy;
+    entry->x = gx + 0.5;
+    entry->y = gy + 0.5;
+    entry->name = "Server Cabinet";
+    entry->terminal_index = terminal_slot;
+    entry->texture_index = rand() % NUM_CABINET_TEXTURES;
+    terminal_init(&game->terminals[entry->terminal_index]);
+    game->map.decor[gy][gx] = 'C';
+    game->cabinet_count++;
+    return true;
 }

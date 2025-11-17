@@ -65,6 +65,33 @@ static void video_destroy(Video *video) {
     SDL_Quit();
 }
 
+static void select_tool(Game *game, HudToolType tool) {
+    if (!game || tool < 0 || tool >= NUM_HUD_TOOLS) {
+        return;
+    }
+    if (game->hud_status.tools[tool] <= 0) {
+        set_hud_message(game, "Tool unavailable.");
+        return;
+    }
+    if (game->hud_status.active_tool == (int)tool) {
+        return;
+    }
+    game->hud_status.active_tool = tool;
+    switch (tool) {
+    case HUD_TOOL_KEYBOARD:
+        set_hud_message(game, "Keyboard ready for cabinet sessions.");
+        break;
+    case HUD_TOOL_AXE:
+        set_hud_message(game, "Axe selected. Target a cabinet.");
+        break;
+    case HUD_TOOL_DEPLOY:
+        set_hud_message(game, "Cabinet builder equipped.");
+        break;
+    default:
+        break;
+    }
+}
+
 int main(void) {
     srand((unsigned)time(NULL));
     Video video = {0};
@@ -195,6 +222,12 @@ int main(void) {
                 if (!event.key.repeat) {
                     if (sym == SDLK_ESCAPE) {
                         running = false;
+                    } else if (sym == SDLK_1 || sym == SDLK_KP_1) {
+                        select_tool(&game, HUD_TOOL_KEYBOARD);
+                    } else if (sym == SDLK_2 || sym == SDLK_KP_2) {
+                        select_tool(&game, HUD_TOOL_AXE);
+                    } else if (sym == SDLK_3 || sym == SDLK_KP_3) {
+                        select_tool(&game, HUD_TOOL_DEPLOY);
                     } else if (sym == SDLK_e) {
                         // E key: Activate display
                         double rayX = game.player.x + cos(game.player.angle) * 1.5;
@@ -207,29 +240,39 @@ int main(void) {
                             activate_display(&game, disp_idx);
                         }
                     } else if (sym == SDLK_u) {
-                        // Activate cabinet - find cabinet player is facing
                         double rayX = game.player.x + cos(game.player.angle) * 1.5;
                         double rayY = game.player.y + sin(game.player.angle) * 1.5;
                         int gx = (int)rayX;
                         int gy = (int)rayY;
+                        HudToolType activeTool = (HudToolType)game.hud_status.active_tool;
+                        if (activeTool == HUD_TOOL_KEYBOARD) {
 #if DEBUG_MODE
-                        printf("[DEBUG] U key pressed:\n");
-                        printf("[DEBUG]   Player position: (%.2f, %.2f)\n", game.player.x, game.player.y);
-                        printf("[DEBUG]   Player angle: %.2f\n", game.player.angle);
-                        printf("[DEBUG]   Raycast position: (%.2f, %.2f)\n", rayX, rayY);
-                        printf("[DEBUG]   Grid position: (%d, %d)\n", gx, gy);
+                            printf("[DEBUG] U key pressed in keyboard mode.\n");
+                            printf("[DEBUG]   Player position: (%.2f, %.2f)\n", game.player.x, game.player.y);
+                            printf("[DEBUG]   Raycast position: (%.2f, %.2f)\n", rayX, rayY);
+                            printf("[DEBUG]   Grid position: (%d, %d)\n", gx, gy);
 #endif
-                        int cab_idx = find_cabinet_at(&game, gx, gy);
-                        if (cab_idx >= 0) {
-#if DEBUG_MODE
-                            printf("[DEBUG] Activating cabinet #%d\n", cab_idx);
-#endif
-                            activate_cabinet(&game, cab_idx);
+                            int cab_idx = find_cabinet_at(&game, gx, gy);
+                            if (cab_idx >= 0) {
+                                activate_cabinet(&game, cab_idx);
+                            } else {
+                                set_hud_message(&game, "No cabinet nearby. Face a cabinet and press U.");
+                            }
+                        } else if (activeTool == HUD_TOOL_AXE) {
+                            int cab_idx = find_cabinet_at(&game, gx, gy);
+                            if (cab_idx >= 0 && remove_cabinet(&game, cab_idx)) {
+                                set_hud_message(&game, "Cabinet dismantled.");
+                            } else {
+                                set_hud_message(&game, "Nothing to dismantle.");
+                            }
+                        } else if (activeTool == HUD_TOOL_DEPLOY) {
+                            if (place_cabinet(&game, gx, gy)) {
+                                set_hud_message(&game, "Cabinet deployed.");
+                            } else {
+                                set_hud_message(&game, "Cannot deploy cabinet here.");
+                            }
                         } else {
-#if DEBUG_MODE
-                            printf("[DEBUG] No cabinet found, showing error message\n");
-#endif
-                            set_hud_message(&game, "No cabinet nearby. Face a cabinet and press U.");
+                            set_hud_message(&game, "Select a tool before using U.");
                         }
                     } else if (sym == SDLK_f) {
                         // Toggle door
@@ -244,22 +287,27 @@ int main(void) {
         double delta = (currentTicks - lastTicks) / 1000.0;
         lastTicks = currentTicks;
 
+        bool moving_input = false;
         if (!game.terminal_mode) {
             if (state[SDL_SCANCODE_W]) {
                 move_player(&game, cos(game.player.angle) * MOVE_SPEED * delta,
                             sin(game.player.angle) * MOVE_SPEED * delta);
+                moving_input = true;
             }
             if (state[SDL_SCANCODE_S]) {
                 move_player(&game, -cos(game.player.angle) * MOVE_SPEED * delta,
                             -sin(game.player.angle) * MOVE_SPEED * delta);
+                moving_input = true;
             }
             if (state[SDL_SCANCODE_Q]) {
                 move_player(&game, cos(game.player.angle - M_PI_2) * STRAFE_SPEED * delta,
                             sin(game.player.angle - M_PI_2) * STRAFE_SPEED * delta);
+                moving_input = true;
             }
             if (state[SDL_SCANCODE_E]) {
                 move_player(&game, cos(game.player.angle + M_PI_2) * STRAFE_SPEED * delta,
                             sin(game.player.angle + M_PI_2) * STRAFE_SPEED * delta);
+                moving_input = true;
             }
             if (state[SDL_SCANCODE_A] || state[SDL_SCANCODE_LEFT]) {
                 game.player.angle -= ROT_SPEED * delta;
@@ -270,6 +318,7 @@ int main(void) {
                 normalize_angle(&game.player.angle);
             }
         }
+        game_update_hud_bob(&game, moving_input, delta);
 
         if (game.hud_message_timer > 0.0) {
             game.hud_message_timer -= delta;
@@ -309,6 +358,8 @@ int main(void) {
         if (game.skip_display_frames > 0) {
             game.skip_display_frames--;
         }
+
+        game_update_hud_status(&game);
 
         // Render terminal or normal scene
         if (game.terminal_mode && game.active_terminal >= 0 && game.active_terminal < MAX_TERMINALS) {
