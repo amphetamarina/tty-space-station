@@ -130,6 +130,9 @@ DDD    stacked 2 tiles high
 ```
 
 Displays only stack horizontally (when facing up/down) or vertically (when facing left/right).
+Displays must cover at least **four contiguous `D`/`d` tiles** (for example a 2×2 block or a 1×4 strip) to power on and show terminal output.
+
+Need an example? Check `maps/display_demo.map` for a simple layout that includes two 4-wide display walls and a pair of cabinets.
 
 ### Load Custom Maps
 

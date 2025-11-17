@@ -177,137 +177,72 @@ int render_cabinets(const Game *game, uint32_t *pixels, double dirX, double dirY
     return highlight;
 }
 
-int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY, double planeX, double planeY,
-                    double *zbuffer) {
-    const Player *player = &game->player;
-    int highlight = -1;
-    double highlightDepth = 1e9;
-    int crossX = SCREEN_WIDTH / 2;
-    int crossY = SCREEN_HEIGHT / 2;
-    int count = game->display_count < MAX_DISPLAYS ? game->display_count : MAX_DISPLAYS;
+static uint32_t sample_display_pixel(const DisplayEntry *display, const Terminal *term,
+                                     double surface_u, double rel_height, int mapX, int mapY) {
+    const double border = 0.08;
+    uint32_t frameColor = pack_color(25, 35, 50);
+    uint32_t glassColor = pack_color(8, 12, 18);
 
-    for (int i = 0; i < count; ++i) {
-        const DisplayEntry *display = &game->displays[i];
+    bool vertical_wall = fabs(display->normal_x) > fabs(display->normal_y);
+    double axisTiles = vertical_wall ? (display->height > 0 ? display->height : 1) :
+                                       (display->width > 0 ? display->width : 1);
+    if (axisTiles <= 0.0) axisTiles = 1.0;
 
-        // Check if display is facing the player (dot product with view direction)
-        double toPlayerX = player->x - display->x;
-        double toPlayerY = player->y - display->y;
-        double dotProduct = display->normal_x * toPlayerX + display->normal_y * toPlayerY;
-
-        // Only render if player is in front of display (display faces player)
-        if (dotProduct <= 0.0) {
-            continue;
-        }
-
-        // Display center position (offset slightly from wall)
-        double centerX = display->x + display->normal_x * 0.05;
-        double centerY = display->y + display->normal_y * 0.05;
-
-        // Display dimensions in world space
-        double halfWidth = 0.4;
-        double halfHeight = 0.3;
-
-        // Project center to screen for bounds check
-        double relX = centerX - player->x;
-        double relY = centerY - player->y;
-        double invDet = 1.0 / (planeX * dirY - dirX * planeY);
-        double transformX = invDet * (dirY * relX - dirX * relY);
-        double transformY = invDet * (-planeY * relX + planeX * relY);
-
-        if (transformY <= 0.1) {
-            continue;
-        }
-
-        // Simple billboard rendering for displays (flat, axis-aligned)
-        int screenCenterX = (int)((SCREEN_WIDTH / 2) * (1 + transformX / transformY));
-        int screenWidth = abs((int)((SCREEN_HEIGHT / transformY) * halfWidth * 2));
-        int screenHeight = abs((int)((SCREEN_HEIGHT / transformY) * halfHeight * 2));
-
-        if (screenWidth < 4) screenWidth = 4;
-        if (screenHeight < 4) screenHeight = 4;
-
-        int drawStartX = screenCenterX - screenWidth / 2;
-        int drawEndX = screenCenterX + screenWidth / 2;
-        int drawStartY = SCREEN_HEIGHT / 2 - screenHeight / 2;
-        int drawEndY = SCREEN_HEIGHT / 2 + screenHeight / 2;
-
-        if (drawStartX < 0) drawStartX = 0;
-        if (drawEndX >= SCREEN_WIDTH) drawEndX = SCREEN_WIDTH - 1;
-        if (drawStartY < 0) drawStartY = 0;
-        if (drawEndY >= SCREEN_HEIGHT) drawEndY = SCREEN_HEIGHT - 1;
-
-        if (drawStartX >= drawEndX || drawStartY >= drawEndY) {
-            continue;
-        }
-
-        // Check for crosshair hit
-        if (crossX >= drawStartX && crossX <= drawEndX &&
-            crossY >= drawStartY && crossY <= drawEndY) {
-            if (transformY < highlightDepth) {
-                highlightDepth = transformY;
-                highlight = i;
-            }
-        }
-
-        // Get terminal for this display
-        const Terminal *term = NULL;
-        if (display->terminal_index >= 0 && display->terminal_index < MAX_TERMINALS) {
-            term = &game->terminals[display->terminal_index];
-        }
-
-        // Render the display
-        for (int y = drawStartY; y <= drawEndY; ++y) {
-            if (y < 0 || y >= SCREEN_HEIGHT) continue;
-
-            int texY = (int)((double)(y - drawStartY) / (double)screenHeight * TEX_SIZE);
-            if (texY < 0) texY = 0;
-            if (texY >= TEX_SIZE) texY = TEX_SIZE - 1;
-
-            for (int x = drawStartX; x <= drawEndX; ++x) {
-                if (x < 0 || x >= SCREEN_WIDTH) continue;
-                if (transformY >= zbuffer[x]) continue;
-
-                int texX = (int)((double)(x - drawStartX) / (double)screenWidth * TEX_SIZE);
-                if (texX < 0) texX = 0;
-                if (texX >= TEX_SIZE) texX = TEX_SIZE - 1;
-
-                uint32_t color = display_texture[texY * TEX_SIZE + texX];
-
-                // If this is in the screen area (not frame) and we have a terminal, show terminal content
-                if (term && term->active && texX >= 6 && texX < TEX_SIZE - 6 && texY >= 6 && texY < TEX_SIZE - 6) {
-                    // Map texture coordinates to terminal character grid
-                    int screenTexX = texX - 6;
-                    int screenTexY = texY - 6;
-                    int screenWidthTex = TEX_SIZE - 12;
-                    int screenHeightTex = TEX_SIZE - 12;
-
-                    int termX = (screenTexX * TERM_COLS) / screenWidthTex;
-                    int termY = (screenTexY * TERM_ROWS) / screenHeightTex;
-
-                    if (termX >= 0 && termX < TERM_COLS && termY >= 0 && termY < TERM_ROWS) {
-                        const TermCell *cell = &term->cells[termY][termX];
-
-                        // Simple character rendering - use background color if char is space or non-printable
-                        if (cell->ch > 32 && cell->ch < 127) {
-                            // Foreground color (simplified - use white for now)
-                            color = pack_color(200, 200, 200);
-                        } else {
-                            // Background color (dark)
-                            color = pack_color(10, 15, 20);
-                        }
-                    }
-                }
-
-                // Highlight if this is the targeted display
-                if (i == highlight) {
-                    color = blend_colors(color, pack_color(255, 255, 100), 0.25);
-                }
-
-                draw_pixel(pixels, x, y, color);
-            }
-        }
+    double axisCoord = vertical_wall ? (mapY - display->grid_y) + surface_u
+                                     : (mapX - display->grid_x) + surface_u;
+    bool flip_u = vertical_wall ? (display->normal_x > 0) : (display->normal_y > 0);
+    if (flip_u) {
+        axisCoord = axisTiles - axisCoord;
     }
-    return highlight;
+    axisCoord = fmod(axisCoord + axisTiles, axisTiles);
+
+    double u = axisCoord / axisTiles;
+    if (u < 0.0) u = 0.0;
+    if (u > 1.0) u = 1.0;
+
+    double v = rel_height;
+    if (v < 0.0) v = 0.0;
+    if (v > 1.0) v = 1.0;
+
+    bool inside_screen = (u > border && u < 1.0 - border && v > border && v < 1.0 - border);
+    if (!inside_screen) {
+        return frameColor;
+    }
+
+    if (!term || !term->active) {
+        return glassColor;
+    }
+
+    double screenU = (u - border) / (1.0 - border * 2.0);
+    double screenV = (v - border) / (1.0 - border * 2.0);
+    if (screenU < 0.0) screenU = 0.0;
+    if (screenU > 1.0) screenU = 1.0;
+    if (screenV < 0.0) screenV = 0.0;
+    if (screenV > 1.0) screenV = 1.0;
+
+    double termXF = screenU * TERM_COLS;
+    double termYF = screenV * TERM_ROWS;
+    int termX = clamp_int((int)termXF, 0, TERM_COLS - 1);
+    int termY = clamp_int((int)termYF, 0, TERM_ROWS - 1);
+    double glyphXF = termXF - termX;
+    double glyphYF = termYF - termY;
+    int glyphX = clamp_int((int)(glyphXF * 8.0), 0, 7);
+    int glyphY = clamp_int((int)(glyphYF * 8.0), 0, 7);
+
+    const TermCell *cell = &term->cells[termY][termX];
+    unsigned char ch = (unsigned char)cell->ch;
+    if (ch < 32 || ch > 126) {
+        ch = ' ';
+    }
+
+    const unsigned char *bitmap = font8x8_basic[ch];
+    bool pixel_on = (bitmap[glyphY] & (1 << glyphX)) != 0;
+    uint32_t fg_color = ansi_colors[cell->fg_color & 0x0F];
+    uint32_t bg_color = ansi_colors[cell->bg_color & 0x0F];
+    uint32_t glyphColor = pixel_on ? fg_color : bg_color;
+
+    double glow = pixel_on ? 0.2 : 0.5;
+    return blend_colors(glyphColor, glassColor, glow);
 }
 
 void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
@@ -378,6 +313,11 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
             floorY += floorStepY;
         }
     }
+
+    int crossX = SCREEN_WIDTH / 2;
+    int crossY = SCREEN_HEIGHT / 2;
+    int displayHighlight = -1;
+    double displayHighlightDepth = 1e9;
 
     for (int x = 0; x < SCREEN_WIDTH; ++x) {
         double cameraX = 2.0 * x / (double)SCREEN_WIDTH - 1.0;
@@ -483,6 +423,14 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
         }
         wallX -= floor(wallX);
 
+        double surfaceU = wallX;
+        if (side == 0 && rayDirX > 0) {
+            surfaceU = 1.0 - surfaceU;
+        }
+        if (side == 1 && rayDirY < 0) {
+            surfaceU = 1.0 - surfaceU;
+        }
+
         int texX = (int)(wallX * (double)TEX_SIZE);
         if (side == 0 && rayDirX > 0) {
             texX = TEX_SIZE - texX - 1;
@@ -491,15 +439,39 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
             texX = TEX_SIZE - texX - 1;
         }
         int texIndex = tile_texture_index(hitTile);
+        bool renderDisplayWall = (hitTile == 'D' || hitTile == 'd') && game->skip_display_frames <= 0;
+        int displayIndex = -1;
+        const DisplayEntry *columnDisplay = NULL;
+        const Terminal *columnTerm = NULL;
+
+        if (renderDisplayWall) {
+            displayIndex = find_display_at(game, mapX, mapY);
+            if (displayIndex >= 0 && displayIndex < game->display_count) {
+                columnDisplay = &game->displays[displayIndex];
+                if (abs(x - crossX) <= 1 && perpWallDist < displayHighlightDepth) {
+                    displayHighlightDepth = perpWallDist;
+                    displayHighlight = displayIndex;
+                }
+                if (columnDisplay->terminal_index >= 0 && columnDisplay->terminal_index < MAX_TERMINALS) {
+                    columnTerm = &game->terminals[columnDisplay->terminal_index];
+                }
+            } else {
+                renderDisplayWall = false;
+            }
+        }
 
         for (int y = drawStart; y <= drawEnd; ++y) {
             int d = y * 256 - SCREEN_HEIGHT * 128 + lineHeight * 128;
             int texY = ((d * TEX_SIZE) / lineHeight) / 256;
             uint32_t color = wall_textures[texIndex][texY * TEX_SIZE + texX];
 
-            // Render display walls as dark screens (terminal text disabled to prevent crashes)
-            if (hitTile == 'D' || hitTile == 'd') {
-                // Dark blue/teal display screen
+            if (renderDisplayWall && columnDisplay) {
+                double relY = (double)(y - drawStart) / (double)lineHeight;
+                color = sample_display_pixel(columnDisplay, columnTerm, surfaceU, relY, mapX, mapY);
+                if (displayHighlight == displayIndex && abs(x - crossX) <= 1) {
+                    color = blend_colors(color, pack_color(255, 255, 120), 0.35);
+                }
+            } else if (hitTile == 'D' || hitTile == 'd') {
                 color = pack_color(10, 25, 35);
             } else if (side == 1) {
                 color = blend_colors(color, pack_color(0, 0, 0), 0.3);
@@ -535,12 +507,7 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
     }
 
     int cabinetHighlight = render_cabinets(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
-    // Displays are now rendered as walls, not sprites
-    // int displayHighlight = render_displays(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
-    int displayHighlight = -1; // TODO: Implement wall-based display highlighting
 
-    int crossX = SCREEN_WIDTH / 2;
-    int crossY = SCREEN_HEIGHT / 2;
     for (int i = -10; i <= 10; ++i) {
         draw_pixel(pixels, crossX + i, crossY, pack_color(255, 255, 255));
         draw_pixel(pixels, crossX, crossY + i, pack_color(255, 255, 255));
