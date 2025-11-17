@@ -637,6 +637,14 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
 #endif
 
                             // SAFETY: Verify terminal is active and has valid PTY
+#if DEBUG_MODE
+                            if (display_render_counter % 120 == 0) {
+                                printf("[DEBUG CHECK] About to check: term=%p, active=%d, pty_fd=%d\n",
+                                       (void*)term, term ? term->active : -1, term ? term->pty_fd : -1);
+                                printf("[DEBUG CHECK] Condition result: %d\n",
+                                       (term && term->active && term->pty_fd >= 0));
+                            }
+#endif
                             if (term && term->active && term->pty_fd >= 0) {
 #if DEBUG_MODE
                                 static int term_render_counter = 0;
