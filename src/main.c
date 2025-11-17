@@ -1,0 +1,256 @@
+// Main entry point and event loop
+#include "types.h"
+#include "texture.h"
+#include "game.h"
+#include "network.h"
+#include "memory.h"
+#include "player.h"
+#include "renderer.h"
+#include "npc.h"
+#include <SDL2/SDL.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <math.h>
+#include <string.h>
+
+typedef struct {
+    SDL_Window *window;
+    SDL_Renderer *renderer;
+    SDL_Texture *framebuffer;
+} Video;
+
+static bool video_init(Video *video) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
+        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+        return false;
+    }
+    video->window =
+        SDL_CreateWindow("POOM", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, 0);
+    if (!video->window) {
+        fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+        return false;
+    }
+    video->renderer = SDL_CreateRenderer(video->window, -1, SDL_RENDERER_ACCELERATED);
+    if (!video->renderer) {
+        fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
+        SDL_DestroyWindow(video->window);
+        SDL_Quit();
+        return false;
+    }
+    video->framebuffer =
+        SDL_CreateTexture(video->renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH,
+                          SCREEN_HEIGHT);
+    if (!video->framebuffer) {
+        fprintf(stderr, "SDL_CreateTexture failed: %s\n", SDL_GetError());
+        SDL_DestroyRenderer(video->renderer);
+        SDL_DestroyWindow(video->window);
+        SDL_Quit();
+        return false;
+    }
+    return true;
+}
+
+static void video_destroy(Video *video) {
+    if (video->framebuffer) {
+        SDL_DestroyTexture(video->framebuffer);
+    }
+    if (video->renderer) {
+        SDL_DestroyRenderer(video->renderer);
+    }
+    if (video->window) {
+        SDL_DestroyWindow(video->window);
+    }
+    SDL_Quit();
+}
+
+int main(void) {
+    srand((unsigned)time(NULL));
+    Video video = {0};
+    if (!video_init(&video)) {
+        return EXIT_FAILURE;
+    }
+
+    generate_wall_textures();
+    generate_floor_textures();
+    generate_ceiling_textures();
+    generate_furniture_textures();
+    load_custom_textures();
+
+    Game game;
+    game_init(&game);
+    network_init(&game);
+
+    uint32_t *pixels = calloc(SCREEN_WIDTH * SCREEN_HEIGHT, sizeof(uint32_t));
+    double *zbuffer = malloc(sizeof(double) * SCREEN_WIDTH);
+    bool running = true;
+    uint64_t lastTicks = SDL_GetTicks64();
+
+    while (running) {
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                running = false;
+            } else if (event.type == SDL_TEXTINPUT) {
+                if (game.input.active) {
+                    handle_memory_text(&game, event.text.text);
+                } else if (game.chat_input_active) {
+                    handle_chat_text(&game, event.text.text);
+                }
+            } else if (event.type == SDL_KEYDOWN) {
+                SDL_Keycode sym = event.key.keysym.sym;
+                if (game.chat_input_active) {
+                    if (sym == SDLK_BACKSPACE) {
+                        if (game.chat_input_len > 0) {
+                            game.chat_input[--game.chat_input_len] = '\0';
+                        }
+                        continue;
+                    }
+                    if (!event.key.repeat) {
+                        if (sym == SDLK_RETURN) {
+                            submit_chat_input(&game);
+                        } else if (sym == SDLK_ESCAPE) {
+                            cancel_chat_input(&game);
+                        }
+                    }
+                    continue;
+                }
+                if (game.input.active) {
+                    if (sym == SDLK_BACKSPACE) {
+                        memory_backspace(&game);
+                        continue;
+                    }
+                    if (!event.key.repeat) {
+                        if (sym == SDLK_RETURN) {
+                            if (event.key.keysym.mod & KMOD_SHIFT) {
+                                if (game.input.length < MEMORY_TEXT - 1) {
+                                    game.input.buffer[game.input.length++] = '\n';
+                                    game.input.buffer[game.input.length] = '\0';
+                                }
+                            } else {
+                                finalize_memory_input(&game);
+                            }
+                        } else if (sym == SDLK_ESCAPE) {
+                            cancel_memory_input(&game);
+                        }
+                    }
+                    continue;
+                }
+                if (game.dialogue_active) {
+                    if (!event.key.repeat) {
+                        if (sym == SDLK_ESCAPE || sym == SDLK_e || sym == SDLK_n) {
+                            close_npc_dialogue(&game);
+                        }
+                    }
+                    continue;
+                }
+                if (game.viewer_active) {
+                    if (!event.key.repeat) {
+                        if (sym == SDLK_ESCAPE) {
+                            close_memory_view(&game);
+                        } else if (sym == SDLK_e) {
+                            begin_memory_edit(&game, game.viewer_index);
+                        } else if (sym == SDLK_DELETE) {
+                            game.viewer_delete_prompt = true;
+                            set_hud_message(&game, "Delete memory? Y to confirm, N to cancel.");
+                        } else if (sym == SDLK_y && game.viewer_delete_prompt) {
+                            delete_memory(&game, game.viewer_index);
+                            close_memory_view(&game);
+                        } else if (sym == SDLK_n && game.viewer_delete_prompt) {
+                            game.viewer_delete_prompt = false;
+                        }
+                    }
+                    continue;
+                }
+                if (!event.key.repeat) {
+                    if (sym == SDLK_ESCAPE) {
+                        running = false;
+                    } else if (sym == SDLK_m) {
+                        begin_memory_input(&game);
+                    } else if (sym == SDLK_f) {
+                        interact_with_door(&game);
+                    } else if (sym == SDLK_v) {
+                        int idx;
+                        if (target_memory(&game, &idx)) {
+                            open_memory_view(&game, idx);
+                        } else {
+                            set_hud_message(&game, "Aim at a memory plaque to view it.");
+                        }
+                    } else if (sym == SDLK_t) {
+                        if (!begin_chat_input(&game)) {
+                            set_hud_message(&game, "Finish current action before chatting.");
+                        }
+                    } else if (sym == SDLK_n || sym == SDLK_e) {
+                        interact_with_npc(&game);
+                    }
+                }
+            }
+        }
+
+        const Uint8 *state = SDL_GetKeyboardState(NULL);
+        uint64_t currentTicks = SDL_GetTicks64();
+        double delta = (currentTicks - lastTicks) / 1000.0;
+        lastTicks = currentTicks;
+
+        if (!game.input.active && !game.chat_input_active && !game.viewer_active && !game.dialogue_active) {
+            if (state[SDL_SCANCODE_W]) {
+                move_player(&game, cos(game.player.angle) * MOVE_SPEED * delta,
+                            sin(game.player.angle) * MOVE_SPEED * delta);
+            }
+            if (state[SDL_SCANCODE_S]) {
+                move_player(&game, -cos(game.player.angle) * MOVE_SPEED * delta,
+                            -sin(game.player.angle) * MOVE_SPEED * delta);
+            }
+            if (state[SDL_SCANCODE_Q]) {
+                move_player(&game, cos(game.player.angle - M_PI_2) * STRAFE_SPEED * delta,
+                            sin(game.player.angle - M_PI_2) * STRAFE_SPEED * delta);
+            }
+            if (state[SDL_SCANCODE_E]) {
+                move_player(&game, cos(game.player.angle + M_PI_2) * STRAFE_SPEED * delta,
+                            sin(game.player.angle + M_PI_2) * STRAFE_SPEED * delta);
+            }
+            if (state[SDL_SCANCODE_A] || state[SDL_SCANCODE_LEFT]) {
+                game.player.angle -= ROT_SPEED * delta;
+                normalize_angle(&game.player.angle);
+            }
+            if (state[SDL_SCANCODE_D] || state[SDL_SCANCODE_RIGHT]) {
+                game.player.angle += ROT_SPEED * delta;
+                normalize_angle(&game.player.angle);
+            }
+        }
+
+        if (game.hud_message_timer > 0.0) {
+            game.hud_message_timer -= delta;
+            if (game.hud_message_timer < 0.0) {
+                game.hud_message_timer = 0.0;
+                game.hud_message[0] = '\0';
+            }
+        }
+        for (int i = 0; i < game.chat_count;) {
+            game.chat_log[i].ttl -= delta;
+            if (game.chat_log[i].ttl <= 0.0) {
+                memmove(&game.chat_log[i], &game.chat_log[i + 1], sizeof(ChatMessage) * (game.chat_count - i - 1));
+                game.chat_count--;
+            } else {
+                ++i;
+            }
+        }
+
+        npc_update_ai(&game, delta);
+        network_update(&game, delta);
+        render_scene(&game, pixels, zbuffer);
+        SDL_UpdateTexture(video.framebuffer, NULL, pixels, SCREEN_WIDTH * sizeof(uint32_t));
+        SDL_RenderClear(video.renderer);
+        SDL_RenderCopy(video.renderer, video.framebuffer, NULL, NULL);
+        SDL_RenderPresent(video.renderer);
+    }
+
+    free(pixels);
+    free(zbuffer);
+    if (game.has_save_path) {
+        save_memories(&game);
+    }
+    network_shutdown(&game);
+    video_destroy(&video);
+    return EXIT_SUCCESS;
+}

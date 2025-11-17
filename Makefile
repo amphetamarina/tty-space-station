@@ -15,20 +15,42 @@ endif
 ifneq ($(SDL_LIBS),)
 LDFLAGS += $(SDL_LIBS)
 endif
-CFLAGS += -std=c11 -Wall -Wextra -pedantic -O2
+
+# Include directories
+CFLAGS += -std=c11 -Wall -Wextra -pedantic -O2 -Isrc -Iinclude
 LDFLAGS += -lm
+
 TARGET = poom
-SOURCES = poom.c
+
+# Source files
+SOURCES = src/main.c \
+          src/game.c \
+          src/player.c \
+          src/map.c \
+          src/memory.c \
+          src/furniture.c \
+          src/npc.c \
+          src/renderer.c \
+          src/ui.c \
+          src/texture.c \
+          src/utils.c \
+          src/network.c
+
+# Object files
+OBJECTS = $(SOURCES:.c=.o)
 
 .PHONY: all clean run
 
 all: $(TARGET)
 
-$(TARGET): $(SOURCES)
-	$(CC) $(CFLAGS) $(SOURCES) $(LDFLAGS) -o $(TARGET)
+$(TARGET): $(OBJECTS)
+	$(CC) $(OBJECTS) $(LDFLAGS) -o $(TARGET)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 run: $(TARGET)
 	./$(TARGET)
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) $(OBJECTS)
