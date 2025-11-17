@@ -186,6 +186,15 @@ int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY
     int crossY = SCREEN_HEIGHT / 2;
     int count = game->display_count < MAX_DISPLAYS ? game->display_count : MAX_DISPLAYS;
 
+#if DEBUG_MODE
+    static int frame_counter = 0;
+    bool should_log = (frame_counter % 120 == 0); // Log every 2 seconds
+    if (should_log) {
+        printf("[DEBUG RENDER] Frame %d: Rendering %d displays\n", frame_counter, count);
+    }
+    frame_counter++;
+#endif
+
     for (int i = 0; i < count; ++i) {
         const DisplayEntry *display = &game->displays[i];
 
@@ -254,6 +263,24 @@ int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY
         if (display->terminal_index >= 0 && display->terminal_index < MAX_TERMINALS) {
             term = &game->terminals[display->terminal_index];
         }
+
+#if DEBUG_MODE
+        if (should_log && i == 0) { // Log first display only
+            if (term) {
+                printf("[DEBUG RENDER] Display #%d: term_idx=%d, active=%d, pty_fd=%d\n",
+                       i, display->terminal_index, term->active, term->pty_fd);
+                // Sample first few cells
+                printf("[DEBUG RENDER] First 10 chars: ");
+                for (int c = 0; c < 10 && c < TERM_COLS; c++) {
+                    char ch = term->cells[0][c].ch;
+                    printf("'%c'(%d) ", (ch >= 32 && ch < 127) ? ch : '?', (int)ch);
+                }
+                printf("\n");
+            } else {
+                printf("[DEBUG RENDER] Display #%d: NO TERMINAL\n", i);
+            }
+        }
+#endif
 
         // Render the display
         for (int y = drawStartY; y <= drawEndY; ++y) {

@@ -48,8 +48,15 @@ void terminal_init(Terminal *term) {
 
 int terminal_spawn_shell(Terminal *term) {
     if (term->active) {
+#if DEBUG_MODE
+        printf("[DEBUG TERMINAL] terminal_spawn_shell called on already active terminal\n");
+#endif
         return 0; // Already active
     }
+
+#if DEBUG_MODE
+    printf("[DEBUG TERMINAL] Spawning shell for terminal...\n");
+#endif
 
     struct winsize ws = {
         .ws_row = TERM_ROWS,
@@ -63,6 +70,9 @@ int terminal_spawn_shell(Terminal *term) {
 
     if (pid < 0) {
         perror("forkpty");
+#if DEBUG_MODE
+        printf("[DEBUG TERMINAL] forkpty FAILED: errno=%d\n", errno);
+#endif
         return 0;
     }
 
@@ -90,6 +100,10 @@ int terminal_spawn_shell(Terminal *term) {
     if (flags >= 0) {
         fcntl(master_fd, F_SETFL, flags | O_NONBLOCK);
     }
+
+#if DEBUG_MODE
+    printf("[DEBUG TERMINAL] Shell spawned successfully! pid=%d, pty_fd=%d\n", pid, master_fd);
+#endif
 
     return 1;
 }
@@ -459,6 +473,14 @@ void terminal_parse_byte(Terminal *term, uint8_t byte) {
 
 void terminal_update(Terminal *term) {
     if (!term->active || term->pty_fd < 0) {
+#if DEBUG_MODE
+        static int inactive_log_counter = 0;
+        if (inactive_log_counter % 120 == 0) {
+            printf("[DEBUG TERMINAL] terminal_update called on inactive terminal (active=%d, pty_fd=%d)\n",
+                   term->active, term->pty_fd);
+        }
+        inactive_log_counter++;
+#endif
         return;
     }
 
@@ -467,6 +489,9 @@ void terminal_update(Terminal *term) {
     pid_t result = waitpid(term->shell_pid, &status, WNOHANG);
     if (result != 0) {
         // Shell has exited
+#if DEBUG_MODE
+        printf("[DEBUG TERMINAL] Shell died (pid=%d, status=%d)\n", term->shell_pid, status);
+#endif
         terminal_close(term);
         return;
     }
@@ -477,10 +502,32 @@ void terminal_update(Terminal *term) {
     if (nread < 0) {
         if (errno != EAGAIN && errno != EWOULDBLOCK) {
             // Error reading, close terminal
+#if DEBUG_MODE
+            printf("[DEBUG TERMINAL] Error reading from PTY: errno=%d\n", errno);
+#endif
             terminal_close(term);
         }
         return;
     }
+
+#if DEBUG_MODE
+    static int update_counter = 0;
+    if (nread > 0 && update_counter % 60 == 0) {
+        printf("[DEBUG TERMINAL] Read %zd bytes from pty_fd=%d\n", nread, term->pty_fd);
+        // Show first few bytes
+        printf("[DEBUG TERMINAL] Data: ");
+        for (ssize_t i = 0; i < nread && i < 20; i++) {
+            uint8_t byte = (uint8_t)term->read_buffer[i];
+            if (byte >= 32 && byte < 127) {
+                printf("%c", byte);
+            } else {
+                printf("\\x%02x", byte);
+            }
+        }
+        printf("\n");
+    }
+    update_counter++;
+#endif
 
     if (nread == 0) {
         return;
