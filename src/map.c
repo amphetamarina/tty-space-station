@@ -168,6 +168,9 @@ char sanitize_tile(char c) {
     case 'G':
     case 'g':
         return c;
+    case 'C':
+    case 'c':
+        return c;
     case 'X':
         return 'X';
     case 'D':
@@ -262,6 +265,10 @@ void map_store_char(Map *map, int x, int y, char raw) {
         map->tiles[y][x] = '.';
     } else if (tile == 'P' || tile == 'p' || tile == 'G' || tile == 'g') {
         // NPC decor characters
+        map->decor[y][x] = tile;
+        map->tiles[y][x] = '.';
+    } else if (tile == 'C' || tile == 'c') {
+        // Cabinet decor characters
         map->decor[y][x] = tile;
         map->tiles[y][x] = '.';
     } else {

@@ -46,6 +46,7 @@ static TilePalette palette[] = {
     {'W', "Wardrobe", {80, 60, 30, 255}, "Wardrobe"},
     {'P', "Puppy", {139, 90, 43, 255}, "NPC: Puppy"},
     {'G', "Ghost", {200, 220, 255, 255}, "NPC: Ghost"},
+    {'C', "Cabinet", {60, 60, 80, 255}, "Server cabinet (terminal)"},
     {'#', "Wall", {40, 40, 40, 255}, "Solid wall"},
 };
 #define PALETTE_SIZE (sizeof(palette) / sizeof(palette[0]))
