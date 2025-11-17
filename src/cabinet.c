@@ -23,7 +23,7 @@ void rebuild_cabinets(Game *game) {
             }
 
             char marker = game->map.decor[y][x];
-            if (marker == 'C') {
+            if (marker == 'C' || marker == 'c') {
 #if DEBUG_MODE
                 printf("[DEBUG] rebuild_cabinets: Found cabinet 'C' at decor[%d][%d] (grid %d,%d)\n",
                        y, x, x, y);
