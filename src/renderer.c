@@ -198,6 +198,13 @@ int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY
     for (int i = 0; i < count; ++i) {
         const DisplayEntry *display = &game->displays[i];
 
+#if DEBUG_MODE
+        if (should_log && i == 0) {
+            printf("[DEBUG RENDER] Display #%d: pos(%.2f,%.2f) normal(%.2f,%.2f)\n",
+                   i, display->x, display->y, display->normal_x, display->normal_y);
+        }
+#endif
+
         // Check if display is facing the player (dot product with view direction)
         double toPlayerX = player->x - display->x;
         double toPlayerY = player->y - display->y;
@@ -205,6 +212,11 @@ int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY
 
         // Only render if player is in front of display (display faces player)
         if (dotProduct <= 0.0) {
+#if DEBUG_MODE
+            if (should_log && i == 0) {
+                printf("[DEBUG RENDER] Display #%d CULLED: dotProduct=%.3f (player behind display)\n", i, dotProduct);
+            }
+#endif
             continue;
         }
 
@@ -224,6 +236,11 @@ int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY
         double transformY = invDet * (-planeY * relX + planeX * relY);
 
         if (transformY <= 0.1) {
+#if DEBUG_MODE
+            if (should_log && i == 0) {
+                printf("[DEBUG RENDER] Display #%d CULLED: transformY=%.3f (too close or behind)\n", i, transformY);
+            }
+#endif
             continue;
         }
 
@@ -231,6 +248,13 @@ int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY
         int screenCenterX = (int)((SCREEN_WIDTH / 2) * (1 + transformX / transformY));
         int screenWidth = abs((int)((SCREEN_HEIGHT / transformY) * halfWidth * 2));
         int screenHeight = abs((int)((SCREEN_HEIGHT / transformY) * halfHeight * 2));
+
+#if DEBUG_MODE
+        if (should_log && i == 0) {
+            printf("[DEBUG RENDER] Display #%d VISIBLE: transformY=%.3f, screenPos(%d,%d) size(%dx%d)\n",
+                   i, transformY, screenCenterX, SCREEN_HEIGHT/2, screenWidth, screenHeight);
+        }
+#endif
 
         if (screenWidth < 4) screenWidth = 4;
         if (screenHeight < 4) screenHeight = 4;
@@ -302,6 +326,13 @@ int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY
 
                 // If this is in the screen area (not frame) and we have a terminal, show terminal content
                 if (term && term->active && texX >= 6 && texX < TEX_SIZE - 6 && texY >= 6 && texY < TEX_SIZE - 6) {
+#if DEBUG_MODE
+                    static int render_pixel_counter = 0;
+                    if (render_pixel_counter == 0 && should_log && i == 0) {
+                        printf("[DEBUG RENDER] Rendering terminal content pixels for display #%d\n", i);
+                    }
+                    render_pixel_counter++;
+#endif
                     // Map texture coordinates to terminal character grid
                     int screenTexX = texX - 6;
                     int screenTexY = texY - 6;

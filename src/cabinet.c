@@ -25,10 +25,6 @@ void rebuild_cabinets(Game *game) {
 
             char marker = game->map.decor[y][x];
             if (marker == 'C' || marker == 'c') {
-#if DEBUG_MODE
-                printf("[DEBUG] rebuild_cabinets: Found cabinet 'C' at decor[%d][%d] (grid %d,%d)\n",
-                       y, x, x, y);
-#endif
                 CabinetEntry *entry = &game->cabinets[game->cabinet_count];
                 entry->type = CABINET_SERVER;
                 entry->grid_x = x;
@@ -45,10 +41,6 @@ void rebuild_cabinets(Game *game) {
                 }
 
                 game->cabinet_count++;
-#if DEBUG_MODE
-                printf("[DEBUG] rebuild_cabinets: Cabinet #%d added at (%d,%d)\n",
-                       game->cabinet_count - 1, x, y);
-#endif
             }
         }
     }
@@ -77,25 +69,12 @@ bool cabinet_blocks_position(const Game *game, double x, double y) {
 }
 
 int find_cabinet_at(const Game *game, int gx, int gy) {
-#if DEBUG_MODE
-    printf("[DEBUG] find_cabinet_at: Searching for cabinet at grid (%d,%d)\n", gx, gy);
-    printf("[DEBUG] find_cabinet_at: Total cabinets to check: %d\n", game->cabinet_count);
-#endif
+    // Note: Debug logging removed from this function as it's called many times per frame
     for (int i = 0; i < game->cabinet_count; ++i) {
-#if DEBUG_MODE
-        printf("[DEBUG] find_cabinet_at: Cabinet #%d is at grid (%d,%d)\n",
-               i, game->cabinets[i].grid_x, game->cabinets[i].grid_y);
-#endif
         if (game->cabinets[i].grid_x == gx && game->cabinets[i].grid_y == gy) {
-#if DEBUG_MODE
-            printf("[DEBUG] find_cabinet_at: MATCH! Found cabinet #%d\n", i);
-#endif
             return i;
         }
     }
-#if DEBUG_MODE
-    printf("[DEBUG] find_cabinet_at: No cabinet found at (%d,%d)\n", gx, gy);
-#endif
     return -1;
 }
 
