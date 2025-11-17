@@ -430,6 +430,10 @@ void render_remote_player(const Game *game, uint32_t *pixels, double dirX, doubl
 }
 
 void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
+    if (!game->map.tiles || !game->door_state || !game->memory_map) {
+        return;  // Safety check for dynamic arrays
+    }
+
     const Player *player = &game->player;
     double dirX = cos(player->angle);
     double dirY = sin(player->angle);

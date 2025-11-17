@@ -18,6 +18,9 @@ void normalize_angle(double *angle) {
 }
 
 int can_move(const Game *game, double nx, double ny) {
+    if (!game->map.tiles || !game->door_state) {
+        return 0;  // Safety check for dynamic arrays
+    }
     if (nx < 1 || ny < 1 || nx >= game->map.width - 1 || ny >= game->map.height - 1) {
         return 0;
     }
@@ -49,6 +52,10 @@ void move_player(Game *game, double dx, double dy) {
 
 bool ray_pick_wall(const Game *game, double angle, int *wallX, int *wallY, double *hitX, double *hitY,
                    double *normalX, double *normalY) {
+    if (!game->map.tiles) {
+        return false;  // Safety check for dynamic arrays
+    }
+
     const Player *player = &game->player;
     double rayDirX = cos(angle);
     double rayDirY = sin(angle);
@@ -108,6 +115,9 @@ bool ray_pick_wall(const Game *game, double angle, int *wallX, int *wallY, doubl
 }
 
 bool door_is_passable(const Game *game, int gx, int gy) {
+    if (!game->map.tiles || !game->door_state) {
+        return false;  // Safety check for dynamic arrays
+    }
     if (gx < 0 || gy < 0 || gx >= game->map.width || gy >= game->map.height) {
         return false;
     }
@@ -118,6 +128,9 @@ bool door_is_passable(const Game *game, int gx, int gy) {
 }
 
 bool toggle_door_state(Game *game, int gx, int gy, bool notify) {
+    if (!game->door_state) {
+        return false;  // Safety check for dynamic arrays
+    }
     if (gx < 0 || gy < 0 || gx >= game->map.width || gy >= game->map.height) {
         return false;
     }

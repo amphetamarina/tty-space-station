@@ -150,6 +150,10 @@ int layout_text_lines(const char *text, int chars_per_line, char lines[][MEMORY_
 }
 
 void render_minimap(uint32_t *pixels, const Game *game) {
+    if (!game->map.tiles || !game->door_state || !game->memory_map) {
+        return;  // Safety check for dynamic arrays
+    }
+
     int scale = 4;
     int offsetX = 10;
     int offsetY = 10;
