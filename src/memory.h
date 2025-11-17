@@ -11,7 +11,7 @@ void save_memories(const Game *game);
 // Memory management
 int add_memory_entry_at(Game *game, int gx, int gy, double nx, double ny, const char *text);
 void edit_memory_entry(Game *game, int index, const char *text);
-void delete_memory_internal(Game *game, int index, bool notify_network);
+void delete_memory_internal(Game *game, int index);
 void delete_memory(Game *game, int index);
 
 // Memory viewer functions

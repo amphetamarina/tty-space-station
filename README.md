@@ -30,9 +30,15 @@ appears in the terminal where POOM was launched.
 - `M` – point the crosshair at a wall, then type the memory text directly in-game
 - `V` – inspect the plaque you're aiming at (full-screen view, edit, delete)
 - `E` / `N` – interact with NPCs (talk to puppy or ghost)
-- `T` – open the chat prompt (host broadcasts to connected clients)
+- `U` – activate server cabinet (opens terminal session)
 - `F` – toggle doors you are aiming at
-- `Esc` – quit the game or close dialogue
+- `Esc` – quit the game, close dialogue, or exit terminal
+
+### Terminal Controls (when in terminal mode):
+- `ESC` – exit terminal and return to game
+- `Enter` – send command to shell
+- `Backspace`, `Tab`, `Arrow Keys` – standard shell navigation
+- All keyboard input is sent to the shell session
 
 Step near a memory plaque to see its contents in the HUD overlay and on the minimap.
 Up to 96 memories can be stored per session.
@@ -68,6 +74,33 @@ move around the palace, and can be interacted with by aiming at them and pressin
 Each NPC has unique dialogue and personality. NPCs are rendered with Doom-style angle-based
 sprites that change appearance based on your viewing angle (8 directions).
 
+## Server Cabinets & Embedded Terminals
+
+POOM features **embedded terminal emulation** - you can place server cabinets in your memory palace that open real shell sessions!
+
+- **Server Cabinet** (`C` in maps) - Interactive terminal access points
+- Press `U` when facing a cabinet to activate it
+- Opens a full-screen terminal with real bash/sh shell
+- Each cabinet maintains its own persistent session
+- Full ANSI/VT100 terminal emulation with 16-color support
+- Use terminals for:
+  - Running commands and scripts
+  - Managing files and processes
+  - Organizing development workflows
+  - Creating your perfect "memory palace server room"
+
+Press `ESC` to exit terminal mode and return to the game. The shell session remains active in the background.
+
+**Terminal Features:**
+- 80x24 character display
+- Full ANSI color support
+- PTY (pseudo-terminal) with real shell process
+- Arrow keys for command history
+- Tab completion
+- All standard bash/shell features
+
+**Example:** Create a memory palace with server cabinets at strategic locations - each one a portal to different development environments, tmux sessions, or system administration tasks.
+
 ## Custom maps
 
 A default layout is stored in `maps/palace.map`. Floors accept `.`, `,`, or `;` to pick
@@ -80,7 +113,9 @@ Furniture glyphs let you decorate and add collision: `T`/`t` drop a square table
 
 NPCs can be placed with: `P` for a puppy, `G` for a ghost.
 
-All props and NPCs block movement, show up on the minimap, and highlight their name
+Server cabinets: `C` for a terminal access point.
+
+All props, NPCs, and cabinets block movement, show up on the minimap, and highlight their name
 when you aim at them. Edit the file or point the game to a different map path:
 
 ```bash
@@ -140,26 +175,6 @@ free sources for retro walls/floors include:
 Convert PNG/JPG textures to BMP (e.g., `convert file.png file.bmp`) before
 placing them here so SDL can load them without extra libraries.
 
-## Multiplayer
-
-POOM ships with experimental direct-IP multiplayer (host + one client) for
-shared palaces:
-
-```bash
-# Host
-POOM_NET_MODE=host POOM_NET_PORT=4455 ./poom
-
-# Client
-POOM_NET_MODE=client POOM_NET_HOST=192.168.1.42 POOM_NET_PORT=4455 ./poom
-```
-
-Both sides can specify `POOM_PLAYER_NAME=Alice`. The host is authoritative:
-clients request additions/edits/deletes, and the host broadcasts updates,
-including the current map and stored memories. Multiplayer works with any map
-loaded from disk (generated palaces can be exported via `POOM_GENERATED_MAP` as
-described above). Press `T` to open the in-game chat prompt; hosts broadcast
-messages to connected clients, and client chats are relayed back by the host.
-
 ## Code Organization
 
 The codebase has been reorganized into clean, modular components for better maintainability:
@@ -174,12 +189,13 @@ poom/
 │   ├── map.c/h       # Map loading and generation
 │   ├── memory.c/h    # Memory palace system
 │   ├── furniture.c/h # Furniture management
+│   ├── cabinet.c/h   # Server cabinet management
+│   ├── terminal.c/h  # Terminal emulation and PTY
 │   ├── npc.c/h       # NPC AI and behavior
 │   ├── renderer.c/h  # Raycasting and scene rendering
 │   ├── ui.c/h        # HUD, minimap, dialogue boxes
 │   ├── texture.c/h   # Texture generation and loading
 │   ├── utils.c/h     # Utility functions
-│   ├── network.c/h   # Multiplayer networking
 │   └── types.h       # Core data structures
 ├── include/          # External headers (font8x8)
 ├── assets/
@@ -190,10 +206,19 @@ poom/
 
 ### Recent Improvements
 
+**Terminal Emulation System (NEW!):**
+- Full PTY-based terminal emulation embedded in the game
+- Real bash/sh shell sessions inside server cabinets
+- Complete ANSI/VT100 escape sequence parser
+- 80x24 character display with 16-color support
+- Per-cabinet persistent sessions
+- Transform your memory palace into a server room!
+
 **Visual Enhancements:**
-- High ceiling rendering for less claustrophobic feel
+- Fixed memory plaque rendering (no more nausea-inducing zoom)
 - Doom-style angle-based sprite rendering (8 directions) for furniture and NPCs
-- Memory plaques now show as framed text boxes (wall colors remain normal)
+- Memory plaques display as stable framed text boxes
+- Ceiling/floor rendering reverted to original stable values
 
 **NPC System:**
 - Interactive NPCs with AI (idle, wander, talk states)
@@ -201,7 +226,13 @@ poom/
 - Dialogue system with on-screen text boxes
 - Doom-style billboard sprites with viewing angle variation
 
+**Map System:**
+- Variable map sizes (10x10 to 200x200)
+- Dynamic memory allocation
+- GUI map editor with point-and-click editing
+
 **Code Quality:**
+- Removed all networking/multiplayer code (simplified codebase)
 - Modular architecture with clear separation of concerns
 - Clean header organization and dependency management
 - Comprehensive documentation in each module

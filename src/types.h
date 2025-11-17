@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -30,14 +32,13 @@
 #define NUM_CEIL_TEXTURES 2
 #define MAX_LAYOUT_LINES 32
 #define INPUT_MAX_LINES 10
-#define NET_BUFFER 4096
-#define CHAT_HISTORY 10
-#define CHAT_TEXT 200
 
 #define MAP_FILE_DEFAULT "maps/palace.map"
 
 #define MAX_FURNITURE 64
 #define MAX_NPCS 32
+#define MAX_CABINETS 16
+#define MAX_TERMINALS 16
 
 #define clamp_int(value, min_value, max_value) \
     ((value) < (min_value) ? (min_value) : ((value) > (max_value) ? (max_value) : (value)))
@@ -138,6 +139,58 @@ typedef struct {
     double sprite_height;
 } NPCSpec;
 
+// Terminal emulation structures
+#define TERM_COLS 80
+#define TERM_ROWS 24
+
+typedef struct {
+    char ch;
+    uint8_t fg_color;  // 0-15 (ANSI colors)
+    uint8_t bg_color;  // 0-15
+    uint8_t attrs;     // bold, underline, etc.
+} TermCell;
+
+typedef enum {
+    PARSE_NORMAL,
+    PARSE_ESC,
+    PARSE_CSI,
+    PARSE_CSI_PARAM
+} ParseState;
+
+typedef struct {
+    TermCell cells[TERM_ROWS][TERM_COLS];
+    int cursor_x;
+    int cursor_y;
+    bool cursor_visible;
+    int pty_fd;          // PTY file descriptor
+    pid_t shell_pid;     // Shell process ID
+    bool active;
+    char read_buffer[4096];
+    ParseState parse_state;     // For ANSI parser state machine
+    int ansi_params[16]; // Parameters from escape sequences
+    int ansi_param_count;
+    uint8_t current_fg;  // Current foreground color
+    uint8_t current_bg;  // Current background color
+    uint8_t current_attrs; // Current attributes
+    char csi_buffer[64]; // Buffer for CSI sequence
+    int csi_buffer_len;
+} Terminal;
+
+// Cabinet types
+typedef enum {
+    CABINET_SERVER = 0,
+} CabinetType;
+
+typedef struct {
+    CabinetType type;
+    int grid_x;
+    int grid_y;
+    double x;
+    double y;
+    const char *name;
+    int terminal_index;  // Index into game terminals array
+} CabinetEntry;
+
 typedef struct {
     bool active;
     int targetX;
@@ -151,60 +204,6 @@ typedef struct {
     bool editing;
     int edit_index;
 } MemoryInput;
-
-typedef struct {
-    int id;
-    char name[32];
-    double x;
-    double y;
-    double angle;
-    bool active;
-} RemotePlayer;
-
-typedef enum {
-    NET_NONE = 0,
-    NET_HOST,
-    NET_CLIENT
-} NetworkMode;
-
-typedef enum {
-    CLIENT_STAGE_WAIT_MAP = 0,
-    CLIENT_STAGE_MAP_ROWS,
-    CLIENT_STAGE_WAIT_MEM,
-    CLIENT_STAGE_MEM_ROWS,
-    CLIENT_STAGE_READY
-} ClientStage;
-
-typedef struct {
-    NetworkMode mode;
-    int port;
-    char host_addr[128];
-    char player_name[32];
-    int listen_fd;
-    int peer_fd;
-    char peer_buffer[NET_BUFFER];
-    size_t peer_buffer_len;
-    bool connected;
-    int self_id;
-    RemotePlayer remote;
-    double last_state_send;
-    bool awaiting_map;
-    bool awaiting_mem;
-    int expected_map_rows;
-    int received_map_rows;
-    int expected_mem_entries;
-    int received_mem_entries;
-    int pending_map_height;
-    int pending_map_width;
-    char **pending_map;  // Dynamic allocation: [height][width+1]
-    ClientStage client_stage;
-} NetworkState;
-
-typedef struct {
-    char sender[32];
-    char text[CHAT_TEXT];
-    double ttl;
-} ChatMessage;
 
 typedef struct {
     Map map;
@@ -225,14 +224,13 @@ typedef struct {
     bool viewer_active;
     int viewer_index;
     bool viewer_delete_prompt;
-    NetworkState net;
-    ChatMessage chat_log[CHAT_HISTORY];
-    int chat_count;
-    bool chat_input_active;
-    size_t chat_input_len;
-    char chat_input[CHAT_TEXT];
     int dialogue_npc_index;
     bool dialogue_active;
+    Terminal terminals[MAX_TERMINALS];
+    CabinetEntry cabinets[MAX_CABINETS];
+    int cabinet_count;
+    bool terminal_mode;
+    int active_terminal;  // Which terminal is currently being viewed
 } Game;
 
 #endif // TYPES_H

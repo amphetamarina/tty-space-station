@@ -182,15 +182,6 @@ void render_minimap(uint32_t *pixels, const Game *game) {
             draw_pixel(pixels, offsetX + px + xx, offsetY + py + yy, pack_color(255, 255, 255));
         }
     }
-    if (game->net.remote.active) {
-        int rx = (int)(game->net.remote.x * scale);
-        int ry = (int)(game->net.remote.y * scale);
-        for (int yy = -2; yy <= 2; ++yy) {
-            for (int xx = -2; xx <= 2; ++xx) {
-                draw_pixel(pixels, offsetX + rx + xx, offsetY + ry + yy, pack_color(200, 80, 80));
-            }
-        }
-    }
     for (int i = 0; i < game->furniture_count; ++i) {
         int fx = (int)(game->furniture[i].x * scale);
         int fy = (int)(game->furniture[i].y * scale);

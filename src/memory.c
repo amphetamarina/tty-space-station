@@ -3,7 +3,6 @@
 #include "map.h"
 #include "player.h"
 #include "game.h"
-#include "network.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -107,7 +106,7 @@ void edit_memory_entry(Game *game, int index, const char *text) {
     snprintf(entry->text, sizeof(entry->text), "%s", (text && text[0]) ? text : "Untitled memory");
 }
 
-void delete_memory_internal(Game *game, int index, bool notify_network) {
+void delete_memory_internal(Game *game, int index) {
     if (index < 0 || index >= game->memory_count) {
         return;
     }
@@ -133,21 +132,13 @@ void delete_memory_internal(Game *game, int index, bool notify_network) {
     if (game->has_save_path) {
         save_memories(game);
     }
-    if (notify_network) {
-        network_notify_memory_delete(game, index);
-    }
 }
 
 void delete_memory(Game *game, int index) {
     if (index < 0 || index >= game->memory_count) {
         return;
     }
-    if (game->net.mode == NET_CLIENT) {
-        network_send_request_delete(game, index);
-        set_hud_message(game, "Delete request sent to host.");
-        return;
-    }
-    delete_memory_internal(game, index, true);
+    delete_memory_internal(game, index);
     set_hud_message(game, "Memory deleted.");
 }
 
@@ -257,23 +248,9 @@ void finalize_memory_input(Game *game) {
         return;
     }
     const char *text = game->input.buffer[0] ? game->input.buffer : "Untitled memory";
-    if (game->net.mode == NET_CLIENT) {
-        if (game->input.editing) {
-            network_send_request_edit(game, game->input.edit_index, text);
-        } else {
-            network_send_request_add(game, game->input.targetX, game->input.targetY, game->input.normalX,
-                                     game->input.normalY, text);
-        }
-        game->input.active = false;
-        game->input.editing = false;
-        refresh_text_input(game);
-        set_hud_message(game, "Sent request to host.");
-        return;
-    }
     if (game->input.editing) {
         edit_memory_entry(game, game->input.edit_index, text);
         set_hud_message(game, "Memory updated.");
-        network_notify_memory_edit(game, game->input.edit_index);
     } else {
         int idx = add_memory_entry_at(game, game->input.targetX, game->input.targetY, game->input.normalX,
                                       game->input.normalY, text);
@@ -283,7 +260,6 @@ void finalize_memory_input(Game *game) {
             return;
         }
         set_hud_message(game, "Memory stored.");
-        network_notify_memory_add(game, idx);
     }
     game->input.active = false;
     game->input.editing = false;

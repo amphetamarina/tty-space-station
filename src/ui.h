@@ -17,7 +17,6 @@ int layout_text_lines(const char *text, int chars_per_line, char lines[][MEMORY_
 // UI rendering functions
 void render_minimap(uint32_t *pixels, const Game *game);
 void render_memory_viewer(const Game *game, uint32_t *pixels);
-void render_chat(const Game *game, uint32_t *pixels);
 void render_npc_dialogue(const Game *game, uint32_t *pixels);
 
 // Helper functions

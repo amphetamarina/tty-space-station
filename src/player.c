@@ -3,8 +3,8 @@
 #include "map.h"
 #include "furniture.h"
 #include "npc.h"
+#include "cabinet.h"
 #include "game.h"
-#include "network.h"
 #include <math.h>
 #include <stdio.h>
 
@@ -30,6 +30,9 @@ int can_move(const Game *game, double nx, double ny) {
         return 0;
     }
     if (furniture_blocks_position(game, nx, ny)) {
+        return 0;
+    }
+    if (cabinet_blocks_position(game, nx, ny)) {
         return 0;
     }
     if (npc_blocks_position(game, nx, ny)) {
@@ -159,13 +162,7 @@ bool interact_with_door(Game *game) {
         set_hud_message(game, "No door ahead.");
         return false;
     }
-    if (game->net.mode == NET_CLIENT) {
-        network_send_request_door(game, targetX, targetY);
-        set_hud_message(game, "Door request sent to host.");
-        return true;
-    }
     if (toggle_door_state(game, targetX, targetY, true)) {
-        network_notify_door(game, targetX, targetY, game->door_state[targetY][targetX]);
         return true;
     }
     return false;

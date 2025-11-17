@@ -18,7 +18,7 @@ endif
 
 # Include directories
 CFLAGS += -std=c11 -Wall -Wextra -pedantic -O2 -Isrc -Iinclude
-LDFLAGS += -lm
+LDFLAGS += -lm -lutil
 
 TARGET = poom
 MAPEDITOR = mapeditor
@@ -31,11 +31,12 @@ SOURCES = src/main.c \
           src/memory.c \
           src/furniture.c \
           src/npc.c \
+          src/cabinet.c \
+          src/terminal.c \
           src/renderer.c \
           src/ui.c \
           src/texture.c \
-          src/utils.c \
-          src/network.c
+          src/utils.c
 
 # Object files
 OBJECTS = $(SOURCES:.c=.o)

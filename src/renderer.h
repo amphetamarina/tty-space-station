@@ -14,7 +14,8 @@ int render_npcs(const Game *game, uint32_t *pixels, double dirX, double dirY, do
                 double *zbuffer);
 void render_memory_plaques(const Game *game, uint32_t *pixels, double dirX, double dirY, double planeX, double planeY,
                             double *zbuffer);
-void render_remote_player(const Game *game, uint32_t *pixels, double dirX, double dirY, double planeX, double planeY,
-                           double *zbuffer);
+
+// Terminal rendering
+void render_terminal(const Terminal *term, uint32_t *pixels);
 
 #endif // RENDERER_H

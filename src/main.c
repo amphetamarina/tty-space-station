@@ -3,11 +3,12 @@
 #include "texture.h"
 #include "game.h"
 #include "map.h"
-#include "network.h"
 #include "memory.h"
 #include "player.h"
 #include "renderer.h"
 #include "npc.h"
+#include "cabinet.h"
+#include "terminal.h"
 #include <SDL2/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -80,7 +81,6 @@ int main(void) {
 
     Game game;
     game_init(&game);
-    network_init(&game);
 
     uint32_t *pixels = calloc(SCREEN_WIDTH * SCREEN_HEIGHT, sizeof(uint32_t));
     double *zbuffer = malloc(sizeof(double) * SCREEN_WIDTH);
@@ -93,29 +93,57 @@ int main(void) {
             if (event.type == SDL_QUIT) {
                 running = false;
             } else if (event.type == SDL_TEXTINPUT) {
-                if (game.input.active) {
+                if (game.terminal_mode && game.active_terminal >= 0 && game.active_terminal < MAX_TERMINALS) {
+                    // Send text input to terminal
+                    terminal_write(&game.terminals[game.active_terminal], event.text.text, strlen(event.text.text));
+                } else if (game.input.active) {
                     handle_memory_text(&game, event.text.text);
-                } else if (game.chat_input_active) {
-                    handle_chat_text(&game, event.text.text);
                 }
             } else if (event.type == SDL_KEYDOWN) {
                 SDL_Keycode sym = event.key.keysym.sym;
-                if (game.chat_input_active) {
-                    if (sym == SDLK_BACKSPACE) {
-                        if (game.chat_input_len > 0) {
-                            game.chat_input[--game.chat_input_len] = '\0';
-                        }
+
+                // Terminal mode input handling
+                if (game.terminal_mode && !event.key.repeat) {
+                    if (sym == SDLK_ESCAPE) {
+                        game.terminal_mode = false;
+                        game.active_terminal = -1;
                         continue;
-                    }
-                    if (!event.key.repeat) {
+                    } else if (game.active_terminal >= 0 && game.active_terminal < MAX_TERMINALS) {
+                        Terminal *term = &game.terminals[game.active_terminal];
+                        char buf[8];
+                        size_t len = 0;
+
                         if (sym == SDLK_RETURN) {
-                            submit_chat_input(&game);
-                        } else if (sym == SDLK_ESCAPE) {
-                            cancel_chat_input(&game);
+                            buf[len++] = '\n';
+                        } else if (sym == SDLK_BACKSPACE) {
+                            buf[len++] = '\b';
+                        } else if (sym == SDLK_UP) {
+                            buf[len++] = '\033';
+                            buf[len++] = '[';
+                            buf[len++] = 'A';
+                        } else if (sym == SDLK_DOWN) {
+                            buf[len++] = '\033';
+                            buf[len++] = '[';
+                            buf[len++] = 'B';
+                        } else if (sym == SDLK_RIGHT) {
+                            buf[len++] = '\033';
+                            buf[len++] = '[';
+                            buf[len++] = 'C';
+                        } else if (sym == SDLK_LEFT) {
+                            buf[len++] = '\033';
+                            buf[len++] = '[';
+                            buf[len++] = 'D';
+                        } else if (sym == SDLK_TAB) {
+                            buf[len++] = '\t';
+                        }
+
+                        if (len > 0) {
+                            terminal_write(term, buf, len);
                         }
                     }
                     continue;
                 }
+
                 if (game.input.active) {
                     if (sym == SDLK_BACKSPACE) {
                         memory_backspace(&game);
@@ -177,12 +205,20 @@ int main(void) {
                         } else {
                             set_hud_message(&game, "Aim at a memory plaque to view it.");
                         }
-                    } else if (sym == SDLK_t) {
-                        if (!begin_chat_input(&game)) {
-                            set_hud_message(&game, "Finish current action before chatting.");
-                        }
                     } else if (sym == SDLK_n || sym == SDLK_e) {
                         interact_with_npc(&game);
+                    } else if (sym == SDLK_u) {
+                        // Activate cabinet - find cabinet player is facing
+                        double rayX = game.player.x + cos(game.player.angle) * 1.5;
+                        double rayY = game.player.y + sin(game.player.angle) * 1.5;
+                        int gx = (int)rayX;
+                        int gy = (int)rayY;
+                        int cab_idx = find_cabinet_at(&game, gx, gy);
+                        if (cab_idx >= 0) {
+                            activate_cabinet(&game, cab_idx);
+                        } else {
+                            set_hud_message(&game, "No cabinet nearby. Face a cabinet and press U.");
+                        }
                     }
                 }
             }
@@ -193,7 +229,7 @@ int main(void) {
         double delta = (currentTicks - lastTicks) / 1000.0;
         lastTicks = currentTicks;
 
-        if (!game.input.active && !game.chat_input_active && !game.viewer_active && !game.dialogue_active) {
+        if (!game.input.active && !game.viewer_active && !game.dialogue_active && !game.terminal_mode) {
             if (state[SDL_SCANCODE_W]) {
                 move_player(&game, cos(game.player.angle) * MOVE_SPEED * delta,
                             sin(game.player.angle) * MOVE_SPEED * delta);
@@ -227,19 +263,21 @@ int main(void) {
                 game.hud_message[0] = '\0';
             }
         }
-        for (int i = 0; i < game.chat_count;) {
-            game.chat_log[i].ttl -= delta;
-            if (game.chat_log[i].ttl <= 0.0) {
-                memmove(&game.chat_log[i], &game.chat_log[i + 1], sizeof(ChatMessage) * (game.chat_count - i - 1));
-                game.chat_count--;
-            } else {
-                ++i;
-            }
+
+        // Update terminals if in terminal mode
+        if (game.terminal_mode && game.active_terminal >= 0 && game.active_terminal < MAX_TERMINALS) {
+            terminal_update(&game.terminals[game.active_terminal]);
         }
 
         npc_update_ai(&game, delta);
-        network_update(&game, delta);
-        render_scene(&game, pixels, zbuffer);
+
+        // Render terminal or normal scene
+        if (game.terminal_mode && game.active_terminal >= 0 && game.active_terminal < MAX_TERMINALS) {
+            render_terminal(&game.terminals[game.active_terminal], pixels);
+        } else {
+            render_scene(&game, pixels, zbuffer);
+        }
+
         SDL_UpdateTexture(video.framebuffer, NULL, pixels, SCREEN_WIDTH * sizeof(uint32_t));
         SDL_RenderClear(video.renderer);
         SDL_RenderCopy(video.renderer, video.framebuffer, NULL, NULL);
@@ -251,7 +289,7 @@ int main(void) {
     if (game.has_save_path) {
         save_memories(&game);
     }
-    network_shutdown(&game);
+    game_cleanup_terminals(&game);
     game_free_game_maps(&game);
     map_free(&game.map);
     video_destroy(&video);

@@ -5,6 +5,7 @@
 #include "map.h"
 #include "ui.h"
 #include "npc.h"
+#include "../include/font8x8_basic.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -373,62 +374,6 @@ void render_memory_plaques(const Game *game, uint32_t *pixels, double dirX, doub
     }
 }
 
-void render_remote_player(const Game *game, uint32_t *pixels, double dirX, double dirY, double planeX, double planeY,
-                           double *zbuffer) {
-    if (!game->net.remote.active) {
-        return;
-    }
-    const Player *player = &game->player;
-    double relX = game->net.remote.x - player->x;
-    double relY = game->net.remote.y - player->y;
-    double invDet = 1.0 / (planeX * dirY - dirX * planeY);
-    double transformX = invDet * (dirY * relX - dirX * relY);
-    double transformY = invDet * (-planeY * relX + planeX * relY);
-    if (transformY <= 0.1) {
-        return;
-    }
-    int spriteScreenX = (int)((SCREEN_WIDTH / 2) * (1 + transformX / transformY));
-    int spriteHeight = abs((int)(SCREEN_HEIGHT / transformY));
-    int drawStartY = -spriteHeight / 2 + SCREEN_HEIGHT / 2;
-    if (drawStartY < 0) {
-        drawStartY = 0;
-    }
-    int drawEndY = spriteHeight / 2 + SCREEN_HEIGHT / 2;
-    if (drawEndY >= SCREEN_HEIGHT) {
-        drawEndY = SCREEN_HEIGHT - 1;
-    }
-    int spriteWidth = spriteHeight / 2;
-    if (spriteWidth < 4) {
-        spriteWidth = 4;
-    }
-    int drawStartX = -spriteWidth / 2 + spriteScreenX;
-    if (drawStartX < 0) {
-        drawStartX = 0;
-    }
-    int drawEndX = spriteWidth / 2 + spriteScreenX;
-    if (drawEndX >= SCREEN_WIDTH) {
-        drawEndX = SCREEN_WIDTH - 1;
-    }
-    for (int stripe = drawStartX; stripe < drawEndX; ++stripe) {
-        if (transformY < zbuffer[stripe]) {
-            for (int y = drawStartY; y < drawEndY; ++y) {
-                draw_pixel(pixels, stripe, y, pack_color(220, 80, 80));
-            }
-        }
-    }
-    if (game->net.remote.name[0]) {
-        int labelY = drawStartY - 14;
-        if (labelY < 0) {
-            labelY = 0;
-        }
-        int labelX = spriteScreenX - ((int)strlen(game->net.remote.name) * 4);
-        if (labelX < 0) {
-            labelX = 0;
-        }
-        draw_text(pixels, labelX, labelY, game->net.remote.name, pack_color(255, 200, 200));
-    }
-}
-
 void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
     if (!game->map.tiles || !game->door_state || !game->memory_map) {
         return;  // Safety check for dynamic arrays
@@ -638,7 +583,6 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
     int furnitureHighlight = render_furniture(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
     int npcHighlight = render_npcs(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
     render_memory_plaques(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
-    render_remote_player(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
 
     int crossX = SCREEN_WIDTH / 2;
     int crossY = SCREEN_HEIGHT / 2;
@@ -680,7 +624,7 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
     char lines[3][128];
     gather_nearby(game, lines);
     draw_text(pixels, 20, SCREEN_HEIGHT - 60,
-              "Controls: WASD move, QE strafe, Arrows rotate, M place, V view, T chat, ESC quit",
+              "Controls: WASD move, QE strafe, Arrows rotate, M place, V view, ESC quit",
               pack_color(255, 255, 255));
     char pos[128];
     snprintf(pos, sizeof(pos), "Position (%.1f, %.1f) Memories: %d", player->x, player->y, game->memory_count);
@@ -688,36 +632,8 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
     draw_text(pixels, 20, SCREEN_HEIGHT - 25, lines[0], pack_color(255, 200, 150));
     draw_text(pixels, 20, SCREEN_HEIGHT - 15, lines[1], pack_color(255, 200, 150));
 
-    char netStatus[128];
-    if (game->net.mode == NET_HOST) {
-        if (game->net.peer_fd != -1) {
-            snprintf(netStatus, sizeof(netStatus), "Net: Hosting (client connected)");
-        } else {
-            snprintf(netStatus, sizeof(netStatus), "Net: Hosting on port %d (waiting)", game->net.port);
-        }
-    } else if (game->net.mode == NET_CLIENT) {
-        if (game->net.peer_fd != -1 && game->net.connected) {
-            snprintf(netStatus, sizeof(netStatus), "Net: Client connected to %.64s:%d", game->net.host_addr,
-                     game->net.port);
-        } else {
-            snprintf(netStatus, sizeof(netStatus), "Net: Client connecting to %.64s:%d", game->net.host_addr,
-                     game->net.port);
-        }
-    } else {
-        snprintf(netStatus, sizeof(netStatus), "Net: Offline");
-    }
-    draw_text(pixels, 20, 72, netStatus, pack_color(180, 200, 255));
-
     if (game->hud_message_timer > 0.0 && game->hud_message[0]) {
         draw_text(pixels, 20, SCREEN_HEIGHT - 80, game->hud_message, pack_color(250, 210, 140));
-    }
-
-    int show_chat = game->chat_count < 4 ? game->chat_count : 4;
-    for (int i = 0; i < show_chat; ++i) {
-        const ChatMessage *msg = &game->chat_log[game->chat_count - show_chat + i];
-        char line[CHAT_TEXT + 48];
-        snprintf(line, sizeof(line), "%s: %s", msg->sender, msg->text);
-        draw_text(pixels, 20, 90 + i * 12, line, pack_color(180, 220, 255));
     }
 
     if (game->input.active) {
@@ -767,27 +683,113 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
         }
     }
 
-    if (game->chat_input_active) {
-        int boxW = SCREEN_WIDTH - 200;
-        if (boxW < 320) {
-            boxW = 320;
-        }
-        int boxX = 40;
-        int boxY = SCREEN_HEIGHT - 120;
-        draw_rect(pixels, boxX - 2, boxY - 2, boxW + 4, 64, pack_color(10, 10, 30));
-        draw_rect(pixels, boxX, boxY, boxW, 64, pack_color(25, 25, 60));
-        draw_text(pixels, boxX + 12, boxY + 12, "Chat:", pack_color(255, 255, 255));
-        char buffer[CHAT_TEXT + 4];
-        snprintf(buffer, sizeof(buffer), "> %s%s", game->chat_input,
-                 ((SDL_GetTicks64() / 400) % 2) == 0 ? "_" : " ");
-        draw_text(pixels, boxX + 12, boxY + 30, buffer, pack_color(200, 240, 255));
-    }
-
     if (game->viewer_active) {
         render_memory_viewer(game, pixels);
     }
 
     if (game->dialogue_active) {
         render_npc_dialogue(game, pixels);
+    }
+}
+
+// ANSI color palette (16 colors)
+static const uint32_t ansi_colors[16] = {
+    0xFF000000, // 0: Black
+    0xFFAA0000, // 1: Red
+    0xFF00AA00, // 2: Green
+    0xFFAA5500, // 3: Yellow/Brown
+    0xFF0000AA, // 4: Blue
+    0xFFAA00AA, // 5: Magenta
+    0xFF00AAAA, // 6: Cyan
+    0xFFAAAAAA, // 7: White/Gray
+    0xFF555555, // 8: Bright Black/Gray
+    0xFFFF5555, // 9: Bright Red
+    0xFF55FF55, // 10: Bright Green
+    0xFFFFFF55, // 11: Bright Yellow
+    0xFF5555FF, // 12: Bright Blue
+    0xFFFF55FF, // 13: Bright Magenta
+    0xFF55FFFF, // 14: Bright Cyan
+    0xFFFFFFFF  // 15: Bright White
+};
+
+void render_terminal(const Terminal *term, uint32_t *pixels) {
+    if (!term || !term->active) {
+        return;
+    }
+
+    // Calculate terminal position (centered on screen)
+    int char_width = 8;
+    int char_height = 8;
+    int term_pixel_width = TERM_COLS * char_width;
+    int term_pixel_height = TERM_ROWS * char_height;
+    int start_x = (SCREEN_WIDTH - term_pixel_width) / 2;
+    int start_y = (SCREEN_HEIGHT - term_pixel_height) / 2;
+
+    // Clear screen to black
+    for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
+        pixels[i] = 0xFF000000;
+    }
+
+    // Render each cell
+    for (int row = 0; row < TERM_ROWS; row++) {
+        for (int col = 0; col < TERM_COLS; col++) {
+            const TermCell *cell = &term->cells[row][col];
+            int px = start_x + col * char_width;
+            int py = start_y + row * char_height;
+
+            // Get colors
+            uint32_t bg_color = ansi_colors[cell->bg_color & 0x0F];
+            uint32_t fg_color = ansi_colors[cell->fg_color & 0x0F];
+
+            // Get character bitmap
+            unsigned char ch = (unsigned char)cell->ch;
+            if (ch < 32 || ch > 126) {
+                ch = ' ';
+            }
+            const unsigned char *bitmap = font8x8_basic[ch];
+
+            // Render 8x8 character
+            for (int cy = 0; cy < 8; cy++) {
+                for (int cx = 0; cx < 8; cx++) {
+                    int screen_x = px + cx;
+                    int screen_y = py + cy;
+
+                    if (screen_x >= 0 && screen_x < SCREEN_WIDTH &&
+                        screen_y >= 0 && screen_y < SCREEN_HEIGHT) {
+
+                        bool pixel_set = bitmap[cy] & (1 << cx);
+                        uint32_t color = pixel_set ? fg_color : bg_color;
+                        pixels[screen_y * SCREEN_WIDTH + screen_x] = color;
+                    }
+                }
+            }
+        }
+    }
+
+    // Render cursor if visible
+    if (term->cursor_visible && term->cursor_x >= 0 && term->cursor_x < TERM_COLS &&
+        term->cursor_y >= 0 && term->cursor_y < TERM_ROWS) {
+
+        int px = start_x + term->cursor_x * char_width;
+        int py = start_y + term->cursor_y * char_height;
+
+        // Blinking cursor (just draw a solid block for now)
+        uint32_t cursor_color = 0xFFFFFFFF; // White cursor
+
+        for (int cy = 0; cy < 8; cy++) {
+            for (int cx = 0; cx < 8; cx++) {
+                int screen_x = px + cx;
+                int screen_y = py + cy;
+
+                if (screen_x >= 0 && screen_x < SCREEN_WIDTH &&
+                    screen_y >= 0 && screen_y < SCREEN_HEIGHT) {
+
+                    // Draw cursor as underline
+                    if (cy >= 6) {
+                        pixels[screen_y * SCREEN_WIDTH + screen_x] = cursor_color;
+                    }
+                }
+            }
+        }
     }
 }
