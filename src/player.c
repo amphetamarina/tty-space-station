@@ -4,6 +4,7 @@
 #include "furniture.h"
 #include "npc.h"
 #include "game.h"
+#include "network.h"
 #include <math.h>
 #include <stdio.h>
 
