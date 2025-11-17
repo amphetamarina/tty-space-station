@@ -638,6 +638,13 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
 
                             // SAFETY: Verify terminal is active and has valid PTY
                             if (term && term->active && term->pty_fd >= 0) {
+#if DEBUG_MODE
+                                static int term_render_counter = 0;
+                                if (term_render_counter == 0) {
+                                    printf("[DEBUG RENDER] Attempting to render terminal content (texX=%d, texY=%d)\n", texX, texY);
+                                }
+                                term_render_counter++;
+#endif
                                 // Map wall texture coordinates to terminal space
                                 int screenTexX = texX;
                                 int screenTexY = texY;
@@ -645,6 +652,11 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
                                 // Border region (6 pixels each side)
                                 if (screenTexX >= 6 && screenTexX < TEX_SIZE - 6 &&
                                     screenTexY >= 6 && screenTexY < TEX_SIZE - 6) {
+#if DEBUG_MODE
+                                    if (term_render_counter == 1) {
+                                        printf("[DEBUG RENDER] Inside content area (past border)\n");
+                                    }
+#endif
 
                                     int contentX = screenTexX - 6;
                                     int contentY = screenTexY - 6;
@@ -656,8 +668,22 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
                                         int termX = (contentX * TERM_COLS) / contentWidth;
                                         int termY = (contentY * TERM_ROWS) / contentHeight;
 
+#if DEBUG_MODE
+                                        if (term_render_counter == 1) {
+                                            printf("[DEBUG RENDER] Mapped to term cell (%d,%d)\n", termX, termY);
+                                        }
+#endif
+
                                         // SAFETY: Strict bounds check on terminal array access
                                         if (termX >= 0 && termX < TERM_COLS && termY >= 0 && termY < TERM_ROWS) {
+#if DEBUG_MODE
+                                            if (term_render_counter == 1) {
+                                                printf("[DEBUG RENDER] Accessing cell, char='%c' fg=%d bg=%d\n",
+                                                       term->cells[termY][termX].ch,
+                                                       term->cells[termY][termX].fg_color,
+                                                       term->cells[termY][termX].bg_color);
+                                            }
+#endif
                                             // Access terminal cell data
                                             const TermCell *cell = &term->cells[termY][termX];
 
@@ -691,6 +717,13 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
                                                     uint32_t fg_color = ansi_colors[cell->fg_color & 0x0F];
 
                                                     color = pixel_set ? fg_color : bg_color;
+
+#if DEBUG_MODE
+                                                    if (term_render_counter == 1) {
+                                                        printf("[DEBUG RENDER] Set color: pixel_set=%d, fg=%08x, bg=%08x, result=%08x\n",
+                                                               pixel_set, fg_color, bg_color, color);
+                                                    }
+#endif
                                                 }
                                             }
                                         }
