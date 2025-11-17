@@ -593,15 +593,48 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
                 // Default to dark screen color
                 color = pack_color(10, 25, 35);
 
+#if DEBUG_MODE
+                static int display_render_counter = 0;
+                if (display_render_counter % 120 == 0) {
+                    printf("[DEBUG DISPLAY] Rendering display wall at map(%d,%d)\n", mapX, mapY);
+                }
+                display_render_counter++;
+#endif
+
                 // SAFETY: Extra bounds checking and validation to prevent crashes
                 if (mapX >= 0 && mapX < game->map.width && mapY >= 0 && mapY < game->map.height) {
                     int display_idx = find_display_at(game, mapX, mapY);
 
+#if DEBUG_MODE
+                    if (display_render_counter % 120 == 0) {
+                        printf("[DEBUG DISPLAY] display_idx=%d, display_count=%d\n", display_idx, game->display_count);
+                    }
+#endif
+
                     if (display_idx >= 0 && display_idx < game->display_count && display_idx < MAX_DISPLAYS) {
                         const DisplayEntry *disp = &game->displays[display_idx];
 
+#if DEBUG_MODE
+                        if (display_render_counter % 120 == 0) {
+                            printf("[DEBUG DISPLAY] Found display, terminal_index=%d\n", disp->terminal_index);
+                        }
+#endif
+
                         if (disp->terminal_index >= 0 && disp->terminal_index < MAX_TERMINALS) {
                             const Terminal *term = &game->terminals[disp->terminal_index];
+
+#if DEBUG_MODE
+                            if (display_render_counter % 120 == 0) {
+                                printf("[DEBUG DISPLAY] Terminal: active=%d, pty_fd=%d\n", term->active, term->pty_fd);
+                                if (term->active) {
+                                    printf("[DEBUG DISPLAY] First 5 chars: ");
+                                    for (int c = 0; c < 5 && c < TERM_COLS; c++) {
+                                        printf("'%c'(%d) ", term->cells[0][c].ch, term->cells[0][c].ch);
+                                    }
+                                    printf("\n");
+                                }
+                            }
+#endif
 
                             // SAFETY: Verify terminal is active and has valid PTY
                             if (term && term->active && term->pty_fd >= 0) {
