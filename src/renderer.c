@@ -318,9 +318,12 @@ void render_memory_plaques(const Game *game, uint32_t *pixels, double dirX, doub
         double invDet = 1.0 / (planeX * dirY - dirX * planeY);
         double transformX = invDet * (dirY * relX - dirX * relY);
         double transformY = invDet * (-planeY * relX + planeX * relY);
-        if (transformY <= 0.1) {
+
+        // Only render if in front and at reasonable distance
+        if (transformY <= 0.1 || transformY > 5.0) {
             continue;
         }
+
         int screenX = (int)((SCREEN_WIDTH / 2) * (1 + transformX / transformY));
         if (screenX < 0 || screenX >= SCREEN_WIDTH) {
             continue;
@@ -328,7 +331,17 @@ void render_memory_plaques(const Game *game, uint32_t *pixels, double dirX, doub
         if (transformY > zbuffer[screenX] + 0.1) {
             continue;
         }
-        int baseWidth = clamp_int(((raw_longest_line(entry->text) + 4) * 8), 140, 360);
+
+        // Only show plaque if roughly centered on screen (player is looking at it)
+        if (abs(screenX - SCREEN_WIDTH / 2) > SCREEN_WIDTH / 4) {
+            continue;
+        }
+
+        // Fixed-size plaque with slight scaling based on distance
+        double distScale = 1.0 / (1.0 + transformY * 0.2);
+        distScale = clamp_int((int)(distScale * 100), 50, 100) / 100.0;
+
+        int baseWidth = clamp_int((int)(((raw_longest_line(entry->text) + 4) * 8) * distScale), 100, 320);
         int chars_per_line = clamp_int((baseWidth - 24) / 8, 4, 40);
         char lines[MAX_LAYOUT_LINES][MEMORY_TEXT];
         int longestLine = 0;
@@ -337,24 +350,23 @@ void render_memory_plaques(const Game *game, uint32_t *pixels, double dirX, doub
             lineCount = 1;
             lines[0][0] = '\0';
         }
-        int widthFromText = clamp_int(((longestLine + 4) * 8), 140, 360);
-        if (widthFromText > baseWidth) {
-            baseWidth = widthFromText;
-        }
-        chars_per_line = clamp_int((baseWidth - 24) / 8, 4, 40);
-        lineCount = layout_text_lines(entry->text, chars_per_line, lines, 6, &longestLine);
-        if (lineCount <= 0) {
-            lineCount = 1;
-            lines[0][0] = '\0';
-        }
+
         int plaqueWidth = baseWidth;
-        int plaqueHeight = lineCount * 14 + 28;
-        int screenY = SCREEN_HEIGHT / 2 - plaqueHeight;
-        int boxX = screenX - plaqueWidth / 2;
+        int plaqueHeight = (int)((lineCount * 14 + 28) * distScale);
+
+        // Fixed position near top of screen
+        int screenY = 100;
+        int boxX = SCREEN_WIDTH / 2 - plaqueWidth / 2;
         int boxY = screenY;
+
         draw_rect(pixels, boxX - 2, boxY - 2, plaqueWidth + 4, plaqueHeight + 4, pack_color(10, 10, 20));
         draw_rect(pixels, boxX, boxY, plaqueWidth, plaqueHeight, pack_color(25, 25, 50));
         draw_rect(pixels, boxX + 2, boxY + 2, plaqueWidth - 4, plaqueHeight - 4, pack_color(40, 40, 70));
+
+        int fontSize = (int)(8 * distScale);
+        if (fontSize < 6) fontSize = 6;
+        if (fontSize > 8) fontSize = 8;
+
         for (int line = 0; line < lineCount; ++line) {
             draw_text(pixels, boxX + 10, boxY + 10 + line * 14, lines[line], pack_color(240, 220, 170));
         }
@@ -433,7 +445,7 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
         if (row == 0.0) {
             row = 0.0001;
         }
-        double posZ = 0.7 * SCREEN_HEIGHT;
+        double posZ = 0.5 * SCREEN_HEIGHT;
         double rowDist = posZ / row;
         double floorStepX = rowDist * (rayDirX1 - rayDirX0) / SCREEN_WIDTH;
         double floorStepY = rowDist * (rayDirY1 - rayDirY0) / SCREEN_WIDTH;

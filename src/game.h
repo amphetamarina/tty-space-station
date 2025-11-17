@@ -5,6 +5,8 @@
 
 // Game initialization and state management
 void game_init(Game *game);
+int game_allocate_game_maps(Game *game, int width, int height);
+void game_free_game_maps(Game *game);
 void game_reset_memory(Game *game);
 void game_pick_spawn(Game *game);
 

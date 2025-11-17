@@ -106,23 +106,85 @@ static size_t strnlen_safe(const char *s, size_t maxlen) {
     return len;
 }
 
-static void apply_received_map(Game *game, int rows, char data[][MAP_WIDTH + 1]) {
-    if (rows <= 0) {
+static int allocate_pending_map(NetworkState *net, int width, int height) {
+    if (width < 10 || height < 10 || width > 200 || height > 200) {
+        return 0;
+    }
+
+    net->pending_map = (char **)malloc(height * sizeof(char *));
+    if (!net->pending_map) {
+        return 0;
+    }
+
+    for (int y = 0; y < height; ++y) {
+        net->pending_map[y] = (char *)malloc((width + 1) * sizeof(char));
+        if (!net->pending_map[y]) {
+            for (int i = 0; i < y; ++i) {
+                free(net->pending_map[i]);
+            }
+            free(net->pending_map);
+            net->pending_map = NULL;
+            return 0;
+        }
+        net->pending_map[y][0] = '\0';
+    }
+
+    net->pending_map_width = width;
+    net->pending_map_height = height;
+    return 1;
+}
+
+static void free_pending_map(NetworkState *net) {
+    if (net->pending_map) {
+        for (int y = 0; y < net->pending_map_height; ++y) {
+            if (net->pending_map[y]) {
+                free(net->pending_map[y]);
+            }
+        }
+        free(net->pending_map);
+        net->pending_map = NULL;
+    }
+    net->pending_map_width = 0;
+    net->pending_map_height = 0;
+}
+
+static void apply_received_map(Game *game, int rows, int width, char **data) {
+    if (rows <= 0 || width <= 0 || !data) {
         return;
     }
-    map_init(&game->map);
-    int maxRows = rows < MAP_HEIGHT ? rows : MAP_HEIGHT;
-    game->map.height = maxRows;
-    for (int y = 0; y < maxRows; ++y) {
-        size_t len = strnlen_safe(data[y], MAP_WIDTH);
-        for (int x = 0; x < MAP_WIDTH; ++x) {
+
+    // Free existing map
+    map_free(&game->map);
+    game_free_game_maps(game);
+
+    // Initialize map structure
+    game->map.spawn_set = false;
+    game->map.spawn_x = game->map.spawn_y = 0;
+
+    // Allocate new map with received dimensions
+    if (!map_allocate(&game->map, width, rows)) {
+        return;
+    }
+
+    // Load the received data
+    for (int y = 0; y < rows; ++y) {
+        size_t len = strnlen_safe(data[y], width);
+        for (int x = 0; x < width; ++x) {
             char raw = (x < (int)len) ? data[y][x] : '#';
             map_store_char(&game->map, x, y, raw);
         }
-        game->map.tiles[y][MAP_WIDTH] = '\0';
+        game->map.tiles[y][width] = '\0';
     }
+
     map_enforce_border(&game->map);
     map_apply_wall_styles(&game->map);
+
+    // Allocate game maps for the new dimensions
+    if (!game_allocate_game_maps(game, game->map.width, game->map.height)) {
+        map_free(&game->map);
+        return;
+    }
+
     rebuild_furniture(game);
     game_reset_memory(game);
     game_pick_spawn(game);
@@ -134,10 +196,10 @@ static void network_send_map(Game *game) {
         return;
     }
     net_sendf(net->peer_fd, "WELCOME %d\n", 2);
-    net_sendf(net->peer_fd, "MAP %d\n", game->map.height);
+    net_sendf(net->peer_fd, "MAP %d %d\n", game->map.height, game->map.width);
     for (int y = 0; y < game->map.height; ++y) {
-        char row[MAP_WIDTH + 1];
-        int width = game->map.width < MAP_WIDTH ? game->map.width : MAP_WIDTH;
+        char row[512];
+        int width = game->map.width < 500 ? game->map.width : 500;
         for (int x = 0; x < width; ++x) {
             row[x] = map_export_char(&game->map, x, y);
         }
@@ -171,6 +233,7 @@ void network_shutdown(Game *game) {
         close(net->listen_fd);
         net->listen_fd = -1;
     }
+    free_pending_map(net);
     net->connected = false;
     net->remote.active = false;
     net->mode = NET_NONE;
@@ -430,16 +493,25 @@ static void network_handle_client_line(Game *game, const char *line) {
     if (strncmp(line, "WELCOME ", 8) == 0) {
         net->self_id = atoi(line + 8);
     } else if (strncmp(line, "MAP ", 4) == 0) {
-        net->expected_map_rows = atoi(line + 4);
-        net->received_map_rows = 0;
-        net->client_stage = CLIENT_STAGE_MAP_ROWS;
+        int height = 0, width = 0;
+        if (sscanf(line + 4, "%d %d", &height, &width) == 2) {
+            // Free any existing pending map
+            free_pending_map(net);
+            // Allocate new pending map with received dimensions
+            if (allocate_pending_map(net, width, height)) {
+                net->expected_map_rows = height;
+                net->received_map_rows = 0;
+                net->client_stage = CLIENT_STAGE_MAP_ROWS;
+            }
+        }
     } else if (strncmp(line, "ROW ", 4) == 0 && net->client_stage == CLIENT_STAGE_MAP_ROWS) {
-        if (net->received_map_rows < MAP_HEIGHT) {
-            snprintf(net->pending_map[net->received_map_rows], MAP_WIDTH + 1, "%s", line + 4);
+        if (net->received_map_rows < net->pending_map_height && net->pending_map) {
+            snprintf(net->pending_map[net->received_map_rows], net->pending_map_width + 1, "%s", line + 4);
             net->received_map_rows++;
         }
     } else if (strcmp(line, "ENDMAP") == 0 && net->client_stage == CLIENT_STAGE_MAP_ROWS) {
-        apply_received_map(game, net->received_map_rows, net->pending_map);
+        apply_received_map(game, net->received_map_rows, net->pending_map_width, net->pending_map);
+        free_pending_map(net);
         net->client_stage = CLIENT_STAGE_WAIT_MEM;
     } else if (strncmp(line, "SPAWN ", 6) == 0) {
         int sx, sy;

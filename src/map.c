@@ -16,32 +16,125 @@ static size_t strnlen_safe(const char *s, size_t maxlen) {
     return len;
 }
 
+int map_allocate(Map *map, int width, int height) {
+    if (width < 10 || height < 10 || width > 200 || height > 200) {
+        return 0;  // Safety bounds check
+    }
+
+    // Allocate tiles array
+    map->tiles = (char **)malloc(height * sizeof(char *));
+    if (!map->tiles) {
+        return 0;
+    }
+
+    for (int y = 0; y < height; ++y) {
+        map->tiles[y] = (char *)malloc((width + 1) * sizeof(char));
+        if (!map->tiles[y]) {
+            // Cleanup on failure
+            for (int i = 0; i < y; ++i) {
+                free(map->tiles[i]);
+            }
+            free(map->tiles);
+            map->tiles = NULL;
+            return 0;
+        }
+    }
+
+    // Allocate decor array
+    map->decor = (char **)malloc(height * sizeof(char *));
+    if (!map->decor) {
+        // Cleanup tiles on failure
+        for (int y = 0; y < height; ++y) {
+            free(map->tiles[y]);
+        }
+        free(map->tiles);
+        map->tiles = NULL;
+        return 0;
+    }
+
+    for (int y = 0; y < height; ++y) {
+        map->decor[y] = (char *)malloc(width * sizeof(char));
+        if (!map->decor[y]) {
+            // Cleanup on failure
+            for (int i = 0; i < y; ++i) {
+                free(map->decor[i]);
+            }
+            free(map->decor);
+            map->decor = NULL;
+            for (int i = 0; i < height; ++i) {
+                free(map->tiles[i]);
+            }
+            free(map->tiles);
+            map->tiles = NULL;
+            return 0;
+        }
+    }
+
+    map->width = width;
+    map->height = height;
+    return 1;
+}
+
+void map_free(Map *map) {
+    if (map->tiles) {
+        for (int y = 0; y < map->height; ++y) {
+            if (map->tiles[y]) {
+                free(map->tiles[y]);
+            }
+        }
+        free(map->tiles);
+        map->tiles = NULL;
+    }
+
+    if (map->decor) {
+        for (int y = 0; y < map->height; ++y) {
+            if (map->decor[y]) {
+                free(map->decor[y]);
+            }
+        }
+        free(map->decor);
+        map->decor = NULL;
+    }
+
+    map->width = 0;
+    map->height = 0;
+}
+
 void map_init(Map *map) {
-    map->width = MAP_WIDTH;
-    map->height = MAP_HEIGHT;
+    map->tiles = NULL;
+    map->decor = NULL;
+    map->width = 0;
+    map->height = 0;
     map->spawn_set = false;
     map->spawn_x = map->spawn_y = 0;
-    memset(map->decor, 0, sizeof(map->decor));
-    for (int y = 0; y < MAP_HEIGHT; ++y) {
-        for (int x = 0; x < MAP_WIDTH; ++x) {
+
+    // Allocate default size (48x48 for backwards compatibility)
+    if (!map_allocate(map, MAP_WIDTH, MAP_HEIGHT)) {
+        return;
+    }
+
+    // Initialize all tiles to walls
+    for (int y = 0; y < map->height; ++y) {
+        for (int x = 0; x < map->width; ++x) {
             map->tiles[y][x] = '1';
+            map->decor[y][x] = '\0';
         }
-        map->tiles[y][MAP_WIDTH] = '\0';
+        map->tiles[y][map->width] = '\0';
     }
 }
 
 void map_enforce_border(Map *map) {
-    for (int x = 0; x < MAP_WIDTH; ++x) {
+    for (int x = 0; x < map->width; ++x) {
         map->tiles[0][x] = '1';
-        map->tiles[MAP_HEIGHT - 1][x] = '1';
+        map->tiles[map->height - 1][x] = '1';
         map->decor[0][x] = '\0';
-        map->decor[MAP_HEIGHT - 1][x] = '\0';
+        map->decor[map->height - 1][x] = '\0';
     }
-    for (int y = 0; y < MAP_HEIGHT; ++y) {
+    for (int y = 0; y < map->height; ++y) {
         map->tiles[y][0] = '1';
-        map->tiles[y][MAP_WIDTH - 1] = '1';
+        map->tiles[y][map->width - 1] = '1';
         map->decor[y][0] = '\0';
-        map->decor[y][MAP_WIDTH - 1] = '\0';
+        map->decor[y][map->width - 1] = '\0';
     }
 }
 
@@ -154,7 +247,7 @@ bool tile_is_wall(char tile) {
 }
 
 void map_store_char(Map *map, int x, int y, char raw) {
-    if (x < 0 || y < 0 || x >= MAP_WIDTH || y >= MAP_HEIGHT) {
+    if (x < 0 || y < 0 || x >= map->width || y >= map->height) {
         return;
     }
     char tile = sanitize_tile(raw);
@@ -177,7 +270,7 @@ void map_store_char(Map *map, int x, int y, char raw) {
 }
 
 char map_export_char(const Map *map, int x, int y) {
-    if (x < 0 || y < 0 || x >= MAP_WIDTH || y >= MAP_HEIGHT) {
+    if (x < 0 || y < 0 || x >= map->width || y >= map->height) {
         return '#';
     }
     if (map->spawn_set && x == map->spawn_x && y == map->spawn_y) {
@@ -194,45 +287,88 @@ int load_map_from_file(const char *path, Map *map) {
     if (!fp) {
         return 0;
     }
-    map_init(map);
-    char line[MAP_WIDTH + 16];
-    int y = 0;
-    while (y < MAP_HEIGHT && fgets(line, sizeof(line), fp)) {
+
+    // First pass: count lines and determine max width
+    char line[512];
+    int height = 0;
+    int max_width = 0;
+    while (fgets(line, sizeof(line), fp)) {
         size_t len = strcspn(line, "\r\n");
-        int usable = (len > (size_t)MAP_WIDTH) ? MAP_WIDTH : (int)len;
-        for (int x = 0; x < usable; ++x) {
-            map_store_char(map, x, y, line[x]);
+        if ((int)len > max_width) {
+            max_width = (int)len;
         }
-        for (int x = usable; x < MAP_WIDTH; ++x) {
+        height++;
+    }
+
+    if (height == 0 || max_width == 0) {
+        fclose(fp);
+        return 0;
+    }
+
+    // Clamp dimensions to safe bounds
+    if (height < 10) height = 10;
+    if (height > 200) height = 200;
+    if (max_width < 10) max_width = 10;
+    if (max_width > 200) max_width = 200;
+
+    // Free any existing map data
+    map_free(map);
+
+    // Initialize map structure
+    map->spawn_set = false;
+    map->spawn_x = map->spawn_y = 0;
+
+    // Allocate with detected dimensions
+    if (!map_allocate(map, max_width, height)) {
+        fclose(fp);
+        return 0;
+    }
+
+    // Initialize all cells to walls
+    for (int y = 0; y < map->height; ++y) {
+        for (int x = 0; x < map->width; ++x) {
             map->tiles[y][x] = '#';
             map->decor[y][x] = '\0';
         }
-        map->tiles[y][MAP_WIDTH] = '\0';
+        map->tiles[y][map->width] = '\0';
+    }
+
+    // Second pass: load the actual map data
+    rewind(fp);
+    int y = 0;
+    while (y < height && fgets(line, sizeof(line), fp)) {
+        size_t len = strcspn(line, "\r\n");
+        int usable = (len > (size_t)max_width) ? max_width : (int)len;
+        for (int x = 0; x < usable; ++x) {
+            map_store_char(map, x, y, line[x]);
+        }
+        for (int x = usable; x < max_width; ++x) {
+            map->tiles[y][x] = '#';
+            map->decor[y][x] = '\0';
+        }
+        map->tiles[y][map->width] = '\0';
         y++;
     }
+
     fclose(fp);
-    if (y == 0) {
-        return 0;
-    }
-    map->height = y < MAP_HEIGHT ? y : MAP_HEIGHT;
     map_enforce_border(map);
     map_apply_wall_styles(map);
     return 1;
 }
 
 static void carve_passages(Map *map, int steps) {
-    int x = MAP_WIDTH / 2;
-    int y = MAP_HEIGHT / 2;
+    int x = map->width / 2;
+    int y = map->height / 2;
     for (int i = 0; i < steps; ++i) {
         map->tiles[y][x] = '.';
         int dir = rand() % 4;
         if (dir == 0 && y > 1) {
             y--;
-        } else if (dir == 1 && y < MAP_HEIGHT - 2) {
+        } else if (dir == 1 && y < map->height - 2) {
             y++;
         } else if (dir == 2 && x > 1) {
             x--;
-        } else if (dir == 3 && x < MAP_WIDTH - 2) {
+        } else if (dir == 3 && x < map->width - 2) {
             x++;
         }
     }
@@ -240,10 +376,10 @@ static void carve_passages(Map *map, int steps) {
 
 void map_generate(Map *map) {
     map_init(map);
-    carve_passages(map, MAP_WIDTH * MAP_HEIGHT * 4);
-    for (int i = 0; i < MAP_WIDTH * MAP_HEIGHT / 6; ++i) {
-        int rx = rand() % (MAP_WIDTH - 2) + 1;
-        int ry = rand() % (MAP_HEIGHT - 2) + 1;
+    carve_passages(map, map->width * map->height * 4);
+    for (int i = 0; i < map->width * map->height / 6; ++i) {
+        int rx = rand() % (map->width - 2) + 1;
+        int ry = rand() % (map->height - 2) + 1;
         map->tiles[ry][rx] = '.';
     }
     map_enforce_border(map);

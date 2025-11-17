@@ -89,6 +89,35 @@ POOM_MAP_FILE=~/my_palace.map ./poom
 
 If no map is provided, a random maze is generated at runtime.
 
+### Map Editor
+
+POOM includes a graphical map editor for easy map creation:
+
+```bash
+# Build the editor
+make mapeditor
+
+# Edit an existing map
+./mapeditor maps/palace.map
+
+# Create a new map with custom dimensions
+./mapeditor maps/newmap.map 60 40
+
+# Quick launch
+make editor
+```
+
+The map editor provides:
+- **Point-and-click editing** with visual tile palette
+- **Support for all tile types** (walls, floors, doors, furniture, NPCs)
+- **Variable map sizes** from 10x10 to 100x100
+- **Color-coded tiles** matching their in-game appearance
+- **Grid overlay** for precision
+- **Pan and zoom** for large maps
+- **Real-time preview** as you edit
+
+See `tools/README.md` for detailed editor documentation.
+
 ## Custom textures & assets
 
 Drop optional BMP textures into `assets/textures/` to override the procedural materials:

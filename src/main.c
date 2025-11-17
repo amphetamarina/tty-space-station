@@ -2,6 +2,7 @@
 #include "types.h"
 #include "texture.h"
 #include "game.h"
+#include "map.h"
 #include "network.h"
 #include "memory.h"
 #include "player.h"
@@ -251,6 +252,8 @@ int main(void) {
         save_memories(&game);
     }
     network_shutdown(&game);
+    game_free_game_maps(&game);
+    map_free(&game.map);
     video_destroy(&video);
     return EXIT_SUCCESS;
 }

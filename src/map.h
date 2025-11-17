@@ -6,6 +6,8 @@
 
 // Map initialization and management
 void map_init(Map *map);
+int map_allocate(Map *map, int width, int height);
+void map_free(Map *map);
 void map_enforce_border(Map *map);
 void map_store_char(Map *map, int x, int y, char raw);
 void map_generate(Map *map);

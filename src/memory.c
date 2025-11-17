@@ -113,14 +113,14 @@ void delete_memory_internal(Game *game, int index, bool notify_network) {
     }
     int gx = game->memories[index].grid_x;
     int gy = game->memories[index].grid_y;
-    if (gy >= 0 && gy < MAP_HEIGHT && gx >= 0 && gx < MAP_WIDTH && game->memory_map[gy][gx] == index) {
+    if (gy >= 0 && gy < game->map.height && gx >= 0 && gx < game->map.width && game->memory_map[gy][gx] == index) {
         game->memory_map[gy][gx] = -1;
     }
     for (int i = index + 1; i < game->memory_count; ++i) {
         game->memories[i - 1] = game->memories[i];
         int wx = game->memories[i - 1].grid_x;
         int wy = game->memories[i - 1].grid_y;
-        if (wy >= 0 && wy < MAP_HEIGHT && wx >= 0 && wx < MAP_WIDTH) {
+        if (wy >= 0 && wy < game->map.height && wx >= 0 && wx < game->map.width) {
             game->memory_map[wy][wx] = i - 1;
         }
     }

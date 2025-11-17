@@ -54,8 +54,8 @@ typedef struct {
 typedef struct {
     int width;
     int height;
-    char tiles[MAP_HEIGHT][MAP_WIDTH + 1];
-    char decor[MAP_HEIGHT][MAP_WIDTH];
+    char **tiles;  // Dynamic allocation: [height][width+1]
+    char **decor;  // Dynamic allocation: [height][width]
     bool spawn_set;
     int spawn_x;
     int spawn_y;
@@ -195,7 +195,8 @@ typedef struct {
     int expected_mem_entries;
     int received_mem_entries;
     int pending_map_height;
-    char pending_map[MAP_HEIGHT][MAP_WIDTH + 1];
+    int pending_map_width;
+    char **pending_map;  // Dynamic allocation: [height][width+1]
     ClientStage client_stage;
 } NetworkState;
 
@@ -209,8 +210,8 @@ typedef struct {
     Map map;
     Player player;
     MemoryEntry memories[MAX_MEMORIES];
-    int memory_map[MAP_HEIGHT][MAP_WIDTH];
-    int door_state[MAP_HEIGHT][MAP_WIDTH];
+    int **memory_map;  // Dynamic allocation: [height][width]
+    int **door_state;  // Dynamic allocation: [height][width]
     int memory_count;
     FurnitureEntry furniture[MAX_FURNITURE];
     int furniture_count;

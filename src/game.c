@@ -10,11 +10,92 @@
 #include <string.h>
 #include <SDL2/SDL.h>
 
+int game_allocate_game_maps(Game *game, int width, int height) {
+    if (width < 10 || height < 10 || width > 200 || height > 200) {
+        return 0;
+    }
+
+    // Allocate memory_map
+    game->memory_map = (int **)malloc(height * sizeof(int *));
+    if (!game->memory_map) {
+        return 0;
+    }
+
+    for (int y = 0; y < height; ++y) {
+        game->memory_map[y] = (int *)malloc(width * sizeof(int));
+        if (!game->memory_map[y]) {
+            // Cleanup on failure
+            for (int i = 0; i < y; ++i) {
+                free(game->memory_map[i]);
+            }
+            free(game->memory_map);
+            game->memory_map = NULL;
+            return 0;
+        }
+    }
+
+    // Allocate door_state
+    game->door_state = (int **)malloc(height * sizeof(int *));
+    if (!game->door_state) {
+        // Cleanup memory_map on failure
+        for (int y = 0; y < height; ++y) {
+            free(game->memory_map[y]);
+        }
+        free(game->memory_map);
+        game->memory_map = NULL;
+        return 0;
+    }
+
+    for (int y = 0; y < height; ++y) {
+        game->door_state[y] = (int *)malloc(width * sizeof(int));
+        if (!game->door_state[y]) {
+            // Cleanup on failure
+            for (int i = 0; i < y; ++i) {
+                free(game->door_state[i]);
+            }
+            free(game->door_state);
+            game->door_state = NULL;
+            for (int i = 0; i < height; ++i) {
+                free(game->memory_map[i]);
+            }
+            free(game->memory_map);
+            game->memory_map = NULL;
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+void game_free_game_maps(Game *game) {
+    if (game->memory_map) {
+        for (int y = 0; y < game->map.height; ++y) {
+            if (game->memory_map[y]) {
+                free(game->memory_map[y]);
+            }
+        }
+        free(game->memory_map);
+        game->memory_map = NULL;
+    }
+
+    if (game->door_state) {
+        for (int y = 0; y < game->map.height; ++y) {
+            if (game->door_state[y]) {
+                free(game->door_state[y]);
+            }
+        }
+        free(game->door_state);
+        game->door_state = NULL;
+    }
+}
+
 void game_reset_memory(Game *game) {
     game->memory_count = 0;
-    for (int y = 0; y < MAP_HEIGHT; ++y) {
-        for (int x = 0; x < MAP_WIDTH; ++x) {
-            game->memory_map[y][x] = -1;
+    if (game->memory_map) {
+        for (int y = 0; y < game->map.height; ++y) {
+            for (int x = 0; x < game->map.width; ++x) {
+                game->memory_map[y][x] = -1;
+            }
         }
     }
     game->input.active = false;
@@ -33,9 +114,11 @@ void game_reset_memory(Game *game) {
     game->chat_input[0] = '\0';
     game->dialogue_active = false;
     game->dialogue_npc_index = -1;
-    for (int y = 0; y < MAP_HEIGHT; ++y) {
-        for (int x = 0; x < MAP_WIDTH; ++x) {
-            game->door_state[y][x] = (game->map.tiles[y][x] == 'D') ? 0 : -1;
+    if (game->door_state) {
+        for (int y = 0; y < game->map.height; ++y) {
+            for (int x = 0; x < game->map.width; ++x) {
+                game->door_state[y][x] = (game->map.tiles[y][x] == 'D') ? 0 : -1;
+            }
         }
     }
 }
@@ -62,6 +145,13 @@ void game_pick_spawn(Game *game) {
 
 void game_init(Game *game) {
     memset(game, 0, sizeof(*game));
+
+    // Initialize pointers to NULL
+    game->map.tiles = NULL;
+    game->map.decor = NULL;
+    game->memory_map = NULL;
+    game->door_state = NULL;
+
     const char *custom_map = getenv("POOM_MAP_FILE");
     const char *custom_save = getenv("POOM_SAVE_FILE");
     const char *generated_out = getenv("POOM_GENERATED_MAP");
@@ -77,6 +167,14 @@ void game_init(Game *game) {
             map_source = generated_out;
         }
     }
+
+    // Allocate game maps based on loaded map dimensions
+    if (!game_allocate_game_maps(game, game->map.width, game->map.height)) {
+        // Failed to allocate - cleanup and exit
+        map_free(&game->map);
+        return;
+    }
+
     game_reset_memory(game);
     game->player.angle = 0.0;
     game->player.fov = FOV;
@@ -98,6 +196,7 @@ void game_init(Game *game) {
     game->net.listen_fd = -1;
     game->net.peer_fd = -1;
     game->net.self_id = 1;
+    game->net.pending_map = NULL;
     snprintf(game->net.player_name, sizeof(game->net.player_name), "%s",
              getenv("POOM_PLAYER_NAME") ? getenv("POOM_PLAYER_NAME") : "Explorer");
     game->net.connected = false;

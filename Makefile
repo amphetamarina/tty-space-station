@@ -21,6 +21,7 @@ CFLAGS += -std=c11 -Wall -Wextra -pedantic -O2 -Isrc -Iinclude
 LDFLAGS += -lm
 
 TARGET = poom
+MAPEDITOR = mapeditor
 
 # Source files
 SOURCES = src/main.c \
@@ -39,12 +40,15 @@ SOURCES = src/main.c \
 # Object files
 OBJECTS = $(SOURCES:.c=.o)
 
-.PHONY: all clean run
+.PHONY: all clean run editor
 
-all: $(TARGET)
+all: $(TARGET) $(MAPEDITOR)
 
 $(TARGET): $(OBJECTS)
 	$(CC) $(OBJECTS) $(LDFLAGS) -o $(TARGET)
+
+$(MAPEDITOR): tools/mapeditor.c
+	$(CC) $(CFLAGS) tools/mapeditor.c $(LDFLAGS) -o $(MAPEDITOR)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -52,5 +56,8 @@ $(TARGET): $(OBJECTS)
 run: $(TARGET)
 	./$(TARGET)
 
+editor: $(MAPEDITOR)
+	./$(MAPEDITOR) maps/palace.map
+
 clean:
-	rm -f $(TARGET) $(OBJECTS)
+	rm -f $(TARGET) $(MAPEDITOR) $(OBJECTS)

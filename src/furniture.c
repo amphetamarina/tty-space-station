@@ -5,8 +5,8 @@
 
 void rebuild_furniture(Game *game) {
     game->furniture_count = 0;
-    for (int y = 0; y < game->map.height && y < MAP_HEIGHT; ++y) {
-        for (int x = 0; x < game->map.width && x < MAP_WIDTH; ++x) {
+    for (int y = 0; y < game->map.height; ++y) {
+        for (int x = 0; x < game->map.width; ++x) {
             if (game->furniture_count >= MAX_FURNITURE) {
                 return;
             }
