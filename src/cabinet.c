@@ -6,6 +6,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef _GNU_SOURCE
+extern char *strdup(const char *s);
+#endif
+
 static int find_free_terminal_slot(const Game *game) {
     bool used[MAX_TERMINALS] = {0};
     for (int i = 0; i < game->cabinet_count; ++i) {
@@ -58,6 +62,9 @@ void rebuild_cabinets(Game *game) {
                     continue;
                 }
                 entry->texture_index = rand() % NUM_CABINET_TEXTURES; // Random texture variation
+                entry->custom_name = NULL;
+                entry->custom_color = 0;
+                entry->has_custom_color = false;
 
                 // Initialize the corresponding terminal
                 if (entry->terminal_index < MAX_TERMINALS) {
@@ -166,6 +173,12 @@ bool remove_cabinet(Game *game, int cabinet_index) {
         terminal_init(term);
     }
 
+    // Free custom name if allocated
+    if (entry->custom_name) {
+        free(entry->custom_name);
+        entry->custom_name = NULL;
+    }
+
     for (int i = cabinet_index; i < game->cabinet_count - 1; ++i) {
         game->cabinets[i] = game->cabinets[i + 1];
     }
@@ -213,8 +226,43 @@ bool place_cabinet(Game *game, int gx, int gy) {
     entry->name = "Server Cabinet";
     entry->terminal_index = terminal_slot;
     entry->texture_index = rand() % NUM_CABINET_TEXTURES;
+    entry->custom_name = NULL;
+    entry->custom_color = 0;
+    entry->has_custom_color = false;
     terminal_init(&game->terminals[entry->terminal_index]);
     game->map.decor[gy][gx] = 'C';
     game->cabinet_count++;
     return true;
+}
+
+void set_cabinet_custom_name(CabinetEntry *cabinet, const char *name) {
+    if (!cabinet) {
+        return;
+    }
+
+    // Free existing custom name if any
+    if (cabinet->custom_name) {
+        free(cabinet->custom_name);
+        cabinet->custom_name = NULL;
+    }
+
+    // Set new custom name
+    if (name && name[0] != '\0') {
+        cabinet->custom_name = strdup(name);
+    }
+}
+
+void set_cabinet_custom_color(CabinetEntry *cabinet, uint32_t color) {
+    if (!cabinet) {
+        return;
+    }
+    cabinet->custom_color = color;
+    cabinet->has_custom_color = (color != 0);
+}
+
+const char* get_cabinet_display_name(const CabinetEntry *cabinet) {
+    if (!cabinet) {
+        return "Unknown";
+    }
+    return cabinet->custom_name ? cabinet->custom_name : cabinet->name;
 }

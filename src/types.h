@@ -44,6 +44,19 @@
 #define SKY_TEXTURE_WIDTH 512
 #define SKY_TEXTURE_HEIGHT 128
 
+// Predefined cabinet aura colors
+#define NUM_CABINET_COLORS 10
+#define CABINET_COLOR_RED     0xFFFF3333
+#define CABINET_COLOR_GREEN   0xFF33FF33
+#define CABINET_COLOR_BLUE    0xFF3333FF
+#define CABINET_COLOR_YELLOW  0xFFFFFF33
+#define CABINET_COLOR_CYAN    0xFF33FFFF
+#define CABINET_COLOR_MAGENTA 0xFFFF33FF
+#define CABINET_COLOR_ORANGE  0xFFFF8833
+#define CABINET_COLOR_PURPLE  0xFF8833FF
+#define CABINET_COLOR_PINK    0xFFFF88FF
+#define CABINET_COLOR_WHITE   0xFFFFFFFF
+
 #define clamp_int(value, min_value, max_value) \
     ((value) < (min_value) ? (min_value) : ((value) > (max_value) ? (max_value) : (value)))
 #define PACK_COLOR_LITERAL(r, g, b) \
@@ -132,6 +145,9 @@ typedef struct {
     const char *name;
     int terminal_index;  // Index into game terminals array
     int texture_index;   // Which cabinet texture variation to use (0-3)
+    char *custom_name;   // Custom name set by player (NULL if not set)
+    uint32_t custom_color; // Custom aura color (0 if not set)
+    bool has_custom_color; // Whether a custom color has been set
 } CabinetEntry;
 
 // Display types (wall-mounted monitors)
@@ -165,6 +181,12 @@ typedef struct {
     HudStatus hud_status;
     double hud_bob_phase;
     double hud_bob_offset;
+    // Cabinet rename mode
+    bool rename_mode;
+    int rename_cabinet_index;
+    char rename_buffer[64];
+    int rename_cursor;
+    int rename_color_index;
 } Game;
 
 #endif // TYPES_H

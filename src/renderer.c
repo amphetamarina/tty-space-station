@@ -169,6 +169,20 @@ int render_cabinets(const Game *game, uint32_t *pixels, double dirX, double dirY
                         color = blend_colors(color, pack_color(255, 255, 255), 0.35);
                     }
 
+                    // Apply custom color aura if set
+                    if (entry->has_custom_color) {
+                        // Create aura effect on edges
+                        double normalizedY = (double)(y - drawStartY) / (double)wallHeight;
+                        bool isEdge = (normalizedY < 0.05 || normalizedY > 0.95 ||
+                                      hitTexU < 0.05 || hitTexU > 0.95);
+                        if (isEdge) {
+                            color = blend_colors(color, entry->custom_color, 0.7);
+                        } else {
+                            // Subtle glow even in the center
+                            color = blend_colors(color, entry->custom_color, 0.15);
+                        }
+                    }
+
                     draw_pixel(pixels, x, y, color);
                 }
             }
