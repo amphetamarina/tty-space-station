@@ -861,7 +861,7 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
 
         // Check if this is a display wall - find the associated terminal
         const Terminal *display_term = NULL;
-        if ((hitTile == 'D' || hitTile == 'd') && !game->terminal_mode) {
+        if ((hitTile == 'D' || hitTile == 'd') && !game->terminal_mode && game->skip_display_frames == 0) {
             int disp_idx = find_display_at(game, mapX, mapY);
             if (disp_idx >= 0 && disp_idx < game->display_count) {
                 const DisplayEntry *display = &game->displays[disp_idx];

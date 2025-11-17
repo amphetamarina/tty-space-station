@@ -112,6 +112,7 @@ int main(void) {
                     if (sym == SDLK_F1) {
                         game.terminal_mode = false;
                         game.active_terminal = -1;
+                        game.skip_display_frames = 3;  // Skip rendering for 3 frames
                         continue;
                     } else if (game.active_terminal >= 0 && game.active_terminal < MAX_TERMINALS) {
                         Terminal *term = &game.terminals[game.active_terminal];
@@ -343,14 +344,25 @@ int main(void) {
             }
         }
 
-        // Update all active terminals (not just the one being viewed)
-        for (int i = 0; i < MAX_TERMINALS; i++) {
-            if (game.terminals[i].active && game.terminals[i].pty_fd > 0) {
-                terminal_update(&game.terminals[i]);
+        // Update terminals (only the active one in terminal mode, or all in background)
+        if (game.terminal_mode && game.active_terminal >= 0 && game.active_terminal < MAX_TERMINALS) {
+            // In terminal mode, only update the active terminal
+            terminal_update(&game.terminals[game.active_terminal]);
+        } else {
+            // In normal mode, update all active display terminals
+            for (int i = 0; i < MAX_TERMINALS; i++) {
+                if (game.terminals[i].active && game.terminals[i].pty_fd > 0) {
+                    terminal_update(&game.terminals[i]);
+                }
             }
         }
 
         npc_update_ai(&game, delta);
+
+        // Decrement skip counter
+        if (game.skip_display_frames > 0) {
+            game.skip_display_frames--;
+        }
 
         // Render terminal or normal scene
         if (game.terminal_mode && game.active_terminal >= 0 && game.active_terminal < MAX_TERMINALS) {

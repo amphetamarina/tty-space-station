@@ -256,6 +256,7 @@ typedef struct {
     int display_count;
     bool terminal_mode;
     int active_terminal;  // Which terminal is currently being viewed
+    int skip_display_frames;  // Skip display rendering for N frames after exit
 } Game;
 
 #endif // TYPES_H
