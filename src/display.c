@@ -3,9 +3,35 @@
 #include "display.h"
 #include "terminal.h"
 #include "utils.h"
+#include "map.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+
+static inline bool is_display_tile(const Game *game, int x, int y) {
+    if (!game || !game->map.tiles) {
+        return false;
+    }
+    if (x < 0 || y < 0 || x >= game->map.width || y >= game->map.height) {
+        return false;
+    }
+    char tile = game->map.tiles[y][x];
+    return tile == 'D' || tile == 'd';
+}
+
+static inline bool is_open_space(const Game *game, int x, int y) {
+    if (!game || !game->map.tiles) {
+        return false;
+    }
+    if (x < 0 || y < 0 || x >= game->map.width || y >= game->map.height) {
+        return false;
+    }
+    char tile = game->map.tiles[y][x];
+    if (tile == 'D' || tile == 'd') {
+        return false;
+    }
+    return !tile_is_wall(tile);
+}
 
 void rebuild_displays(Game *game) {
     if (!game || !game->map.tiles || !game->map.decor) {
@@ -17,7 +43,22 @@ void rebuild_displays(Game *game) {
            game->map.width, game->map.height);
 #endif
 
+    for (int i = 0; i < MAX_DISPLAYS; ++i) {
+        if (game->displays[i].name) {
+            free((void *)game->displays[i].name);
+            game->displays[i].name = NULL;
+        }
+        game->displays[i].terminal_index = -1;
+    }
+
     game->display_count = 0;
+    bool terminal_used[MAX_TERMINALS] = {0};
+    for (int i = 0; i < game->cabinet_count; ++i) {
+        int idx = game->cabinets[i].terminal_index;
+        if (idx >= 0 && idx < MAX_TERMINALS) {
+            terminal_used[idx] = true;
+        }
+    }
 
     // Track which tiles are already part of a display
     bool processed[game->map.height][game->map.width];
@@ -29,8 +70,7 @@ void rebuild_displays(Game *game) {
 
     for (int y = 0; y < game->map.height; ++y) {
         for (int x = 0; x < game->map.width; ++x) {
-            char tile = game->map.tiles[y][x];
-            if ((tile == 'D' || tile == 'd') && !processed[y][x]) {
+            if (is_display_tile(game, x, y) && !processed[y][x]) {
                 if (game->display_count >= MAX_DISPLAYS) {
 #if DEBUG_MODE
                     printf("[DEBUG] Maximum displays (%d) reached, skipping display at (%d,%d)\n",
@@ -45,22 +85,22 @@ void rebuild_displays(Game *game) {
                 bool has_orientation = false;
 
                 // Check which side has floor/open space - display faces that direction
-                if (x > 0 && (game->map.tiles[y][x - 1] == '.' || game->map.tiles[y][x - 1] == 'S')) {
+                if (is_open_space(game, x - 1, y)) {
                     // Open space to the left, display faces left
                     normal_x = -1.0;
                     normal_y = 0.0;
                     has_orientation = true;
-                } else if (x < game->map.width - 1 && (game->map.tiles[y][x + 1] == '.' || game->map.tiles[y][x + 1] == 'S')) {
+                } else if (is_open_space(game, x + 1, y)) {
                     // Open space to the right, display faces right
                     normal_x = 1.0;
                     normal_y = 0.0;
                     has_orientation = true;
-                } else if (y > 0 && (game->map.tiles[y - 1][x] == '.' || game->map.tiles[y - 1][x] == 'S')) {
+                } else if (is_open_space(game, x, y - 1)) {
                     // Open space above, display faces up
                     normal_x = 0.0;
                     normal_y = -1.0;
                     has_orientation = true;
-                } else if (y < game->map.height - 1 && (game->map.tiles[y + 1][x] == '.' || game->map.tiles[y + 1][x] == 'S')) {
+                } else if (is_open_space(game, x, y + 1)) {
                     // Open space below, display faces down
                     normal_x = 0.0;
                     normal_y = 1.0;
@@ -80,18 +120,30 @@ void rebuild_displays(Game *game) {
 
                 // Horizontal stacking (only if facing up/down)
                 if (normal_y != 0) {
-                    while (x + stack_width < game->map.width &&
-                           (game->map.tiles[y][x + stack_width] == 'D' || game->map.tiles[y][x + stack_width] == 'd')) {
+                    while (x + stack_width < game->map.width && is_display_tile(game, x + stack_width, y)) {
                         stack_width++;
                     }
                 }
 
                 // Vertical stacking (only if facing left/right)
                 if (normal_x != 0) {
-                    while (y + stack_height < game->map.height &&
-                           (game->map.tiles[y + stack_height][x] == 'D' || game->map.tiles[y + stack_height][x] == 'd')) {
+                    while (y + stack_height < game->map.height && is_display_tile(game, x, y + stack_height)) {
                         stack_height++;
                     }
+                }
+
+                int total_tiles = stack_width * stack_height;
+                if (total_tiles < 4) {
+                    for (int dy = 0; dy < stack_height; ++dy) {
+                        for (int dx = 0; dx < stack_width; ++dx) {
+                            processed[y + dy][x + dx] = true;
+                        }
+                    }
+#if DEBUG_MODE
+                    printf("[DEBUG] Display at (%d,%d) is only %dx%d (<4 tiles). Treating as regular wall.\n",
+                           x, y, stack_width, stack_height);
+#endif
+                    continue;
                 }
 
                 DisplayEntry *display = &game->displays[game->display_count];
@@ -104,6 +156,15 @@ void rebuild_displays(Game *game) {
                 display->width = stack_width;
                 display->height = stack_height;
 
+                int terminal_slot = -1;
+                for (int t = 0; t < MAX_TERMINALS; ++t) {
+                    if (!terminal_used[t]) {
+                        terminal_slot = t;
+                        terminal_used[t] = true;
+                        break;
+                    }
+                }
+
                 // Create unique name
                 static char name_buf[64];
                 if (stack_width > 1 || stack_height > 1) {
@@ -114,12 +175,18 @@ void rebuild_displays(Game *game) {
                 }
                 display->name = strdup(name_buf);
 
-                // Assign terminal (cycle through available terminals)
-                display->terminal_index = game->display_count % MAX_TERMINALS;
+                display->terminal_index = terminal_slot;
+                if (terminal_slot >= 0 && terminal_slot < MAX_TERMINALS) {
+                    terminal_init(&game->terminals[terminal_slot]);
+                } else {
+#if DEBUG_MODE
+                    printf("[DEBUG] No free terminal slot for display %s\n", name_buf);
+#endif
+                }
 
                 // Mark all tiles in this display as processed
-                for (int dy = 0; dy < stack_height; dy++) {
-                    for (int dx = 0; dx < stack_width; dx++) {
+                for (int dy = 0; dy < stack_height; ++dy) {
+                    for (int dx = 0; dx < stack_width; ++dx) {
                         processed[y + dy][x + dx] = true;
                     }
                 }

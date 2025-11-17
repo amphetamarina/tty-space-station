@@ -349,9 +349,9 @@ int main(void) {
             }
         }
 
-        // Update only the active terminal when in terminal mode
-        if (game.terminal_mode && game.active_terminal >= 0 && game.active_terminal < MAX_TERMINALS) {
-            terminal_update(&game.terminals[game.active_terminal]);
+        // Keep terminal sessions alive even when not directly viewed
+        for (int i = 0; i < MAX_TERMINALS; ++i) {
+            terminal_update(&game.terminals[i]);
         }
 
         // Decrement skip counter
