@@ -5,6 +5,7 @@
 #include "map.h"
 #include "ui.h"
 #include "display.h"
+#include "cabinet.h"
 #include "../include/font8x8_basic.h"
 #include <math.h>
 #include <stdio.h>
