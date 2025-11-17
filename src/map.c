@@ -271,6 +271,9 @@ void map_store_char(Map *map, int x, int y, char raw) {
         // Cabinet decor characters
         map->decor[y][x] = tile;
         map->tiles[y][x] = '.';
+#if DEBUG_MODE
+        printf("[DEBUG] Cabinet marker '%c' stored at decor[%d][%d]\n", tile, y, x);
+#endif
     } else {
         map->tiles[y][x] = tile;
     }

@@ -7,6 +7,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+// Debug mode - set to 1 to enable verbose logging
+#define DEBUG_MODE 1
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif

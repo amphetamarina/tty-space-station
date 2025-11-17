@@ -213,10 +213,23 @@ int main(void) {
                         double rayY = game.player.y + sin(game.player.angle) * 1.5;
                         int gx = (int)rayX;
                         int gy = (int)rayY;
+#if DEBUG_MODE
+                        printf("[DEBUG] U key pressed:\n");
+                        printf("[DEBUG]   Player position: (%.2f, %.2f)\n", game.player.x, game.player.y);
+                        printf("[DEBUG]   Player angle: %.2f\n", game.player.angle);
+                        printf("[DEBUG]   Raycast position: (%.2f, %.2f)\n", rayX, rayY);
+                        printf("[DEBUG]   Grid position: (%d, %d)\n", gx, gy);
+#endif
                         int cab_idx = find_cabinet_at(&game, gx, gy);
                         if (cab_idx >= 0) {
+#if DEBUG_MODE
+                            printf("[DEBUG] Activating cabinet #%d\n", cab_idx);
+#endif
                             activate_cabinet(&game, cab_idx);
                         } else {
+#if DEBUG_MODE
+                            printf("[DEBUG] No cabinet found, showing error message\n");
+#endif
                             set_hud_message(&game, "No cabinet nearby. Face a cabinet and press U.");
                         }
                     }
