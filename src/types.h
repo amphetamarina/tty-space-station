@@ -88,6 +88,8 @@ typedef struct {
     int cursor_x;
     int cursor_y;
     bool cursor_visible;
+    int saved_cursor_x;  // For CSI s/u (save/restore cursor)
+    int saved_cursor_y;
     int pty_fd;          // PTY file descriptor
     pid_t shell_pid;     // Shell process ID
     bool active;

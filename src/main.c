@@ -231,6 +231,9 @@ int main(void) {
 #endif
                             set_hud_message(&game, "No cabinet nearby. Face a cabinet and press U.");
                         }
+                    } else if (sym == SDLK_f) {
+                        // Toggle door
+                        interact_with_door(&game);
                     }
                 }
             }
@@ -273,6 +276,27 @@ int main(void) {
             if (game.hud_message_timer < 0.0) {
                 game.hud_message_timer = 0.0;
                 game.hud_message[0] = '\0';
+            }
+        }
+
+        // Show interaction hints when no HUD message is active
+        if (!game.terminal_mode && game.hud_message_timer <= 0.0) {
+            double rayX = game.player.x + cos(game.player.angle) * 1.5;
+            double rayY = game.player.y + sin(game.player.angle) * 1.5;
+            int gx = (int)rayX;
+            int gy = (int)rayY;
+
+            // Check what the player is facing
+            if (find_cabinet_at(&game, gx, gy) >= 0) {
+                snprintf(game.hud_message, sizeof(game.hud_message), "Press U to activate cabinet");
+            } else if (find_display_at(&game, gx, gy) >= 0) {
+                snprintf(game.hud_message, sizeof(game.hud_message), "Press E to use display");
+            } else if (game.door_state && gx >= 0 && gx < game.map.width &&
+                       gy >= 0 && gy < game.map.height &&
+                       game.map.tiles[gy][gx] == 'D') {
+                bool is_open = game.door_state[gy][gx] == 1;
+                snprintf(game.hud_message, sizeof(game.hud_message),
+                         "Press F to %s door", is_open ? "close" : "open");
             }
         }
 

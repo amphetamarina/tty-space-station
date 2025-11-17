@@ -30,18 +30,17 @@ Priority-ordered list of improvements and features for future development.
 
 ### 2. Fix Terminal `clear` Command
 **Priority**: 🟠 HIGH
-**Status**: Partially working
+**Status**: ✅ FIXED
 
 **Problem**: The `clear` command doesn't properly clear the screen. Some terminal apps don't work correctly.
 
-**Likely cause**: ANSI escape sequence handling in CSI parser
-
-**Next steps**:
-- [ ] Review `terminal_handle_csi()` in `src/terminal.c`
-- [ ] Add logging for CSI sequences received
-- [ ] Test specifically: `clear`, `reset`, `tput clear`
-- [ ] Compare escape sequences with real terminal (run `script` to capture)
-- [ ] Implement missing CSI commands (ED, EL, etc.)
+**Solution**: Implemented all three modes of CSI J (Erase in Display):
+- [x] Mode 0: Clear from cursor to end of screen (default for many apps)
+- [x] Mode 1: Clear from cursor to beginning of screen
+- [x] Mode 2: Clear entire screen
+- [x] Added ESC c (Reset to Initial State) support
+- [x] Added CSI ?25h/l (cursor visibility control)
+- [x] Added CSI s/u (save/restore cursor position)
 
 **Location**: `src/terminal.c` - ANSI parser state machine
 
@@ -84,16 +83,21 @@ Priority-ordered list of improvements and features for future development.
 
 ### 5. Better Cabinet/Display Highlighting
 **Priority**: 🟡 MEDIUM
-**Status**: Basic crosshair system works
+**Status**: ✅ IMPROVED
 
-**Ideas**:
-- [ ] Highlight cabinets/displays when close enough
-- [ ] Show "Press U to activate" or "Press E to use" hints
+**Completed**:
+- [x] Show "Press U to activate" hints when facing cabinets
+- [x] Show "Press E to use" hints when facing displays
+- [x] Show "Press F to open/close door" hints when facing doors
+- [x] Fixed missing F key binding for door toggle
+
+**Future improvements**:
 - [ ] Different colors for active vs inactive terminals
 - [ ] Show terminal status (running command, idle, etc.)
 - [ ] Glow effect for interactive objects
+- [ ] Visual highlighting of objects in 3D view
 
-**Files**: `src/renderer.c`, `src/ui.c`
+**Files**: `src/main.c`, `src/renderer.c`, `src/ui.c`
 
 ### 6. Add Sound Effects
 **Priority**: 🟡 MEDIUM
@@ -243,6 +247,15 @@ Priority-ordered list of improvements and features for future development.
 
 ## Recently Completed ✅
 
+### Latest Session (Terminal Improvements & UX Enhancements)
+- [x] **Fix terminal `clear` command** - Implemented all CSI J modes (0, 1, 2)
+- [x] **Add ESC c support** - Terminal reset functionality
+- [x] **Add cursor visibility control** - CSI ?25h/l sequences
+- [x] **Add save/restore cursor** - CSI s/u commands for better vim/app support
+- [x] **Add interaction hints** - Show "Press U/E/F" when facing objects
+- [x] **Fix missing F key binding** - Door toggle now works properly
+
+### Previous Sessions
 - [x] Disable display text rendering (temporary fix for crashes)
 - [x] Remove memory palace system
 - [x] Remove NPC system (dogs, ghosts)

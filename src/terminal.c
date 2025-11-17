@@ -25,6 +25,8 @@ void terminal_init(Terminal *term) {
     term->cursor_x = 0;
     term->cursor_y = 0;
     term->cursor_visible = true;
+    term->saved_cursor_x = 0;
+    term->saved_cursor_y = 0;
     term->pty_fd = -1;
     term->shell_pid = -1;
     term->active = false;
@@ -198,9 +200,13 @@ void terminal_handle_csi(Terminal *term) {
     char *buf = term->csi_buffer;
     char final = buf[term->csi_buffer_len - 1];
 
+    // Check for private mode sequences (start with '?')
+    bool private_mode = (buf[0] == '?');
+    char *param_start = private_mode ? buf + 1 : buf;
+
     // Parse numeric parameters
     term->ansi_param_count = 0;
-    char *ptr = buf;
+    char *ptr = param_start;
     while (*ptr && term->ansi_param_count < 16) {
         if (*ptr >= '0' && *ptr <= '9') {
             term->ansi_params[term->ansi_param_count] = atoi(ptr);
@@ -208,6 +214,24 @@ void terminal_handle_csi(Terminal *term) {
             while (*ptr >= '0' && *ptr <= '9') ptr++;
         } else {
             ptr++;
+        }
+    }
+
+    // Handle private mode sequences
+    if (private_mode) {
+        switch (final) {
+            case 'h': // Set private mode
+                if (term->ansi_param_count > 0 && term->ansi_params[0] == 25) {
+                    // Show cursor
+                    term->cursor_visible = true;
+                }
+                return;
+            case 'l': // Reset private mode
+                if (term->ansi_param_count > 0 && term->ansi_params[0] == 25) {
+                    // Hide cursor
+                    term->cursor_visible = false;
+                }
+                return;
         }
     }
 
@@ -245,9 +269,46 @@ void terminal_handle_csi(Terminal *term) {
             if (term->cursor_x < 0) term->cursor_x = 0;
             break;
         }
-        case 'J': { // Clear screen
+        case 'J': { // Erase in Display (ED)
             int n = (term->ansi_param_count > 0) ? term->ansi_params[0] : 0;
-            if (n == 2) {
+            if (n == 0) {
+                // Clear from cursor to end of screen
+                // Clear rest of current line
+                for (int x = term->cursor_x; x < TERM_COLS; x++) {
+                    term->cells[term->cursor_y][x].ch = ' ';
+                    term->cells[term->cursor_y][x].fg_color = term->current_fg;
+                    term->cells[term->cursor_y][x].bg_color = term->current_bg;
+                    term->cells[term->cursor_y][x].attrs = term->current_attrs;
+                }
+                // Clear all lines below cursor
+                for (int y = term->cursor_y + 1; y < TERM_ROWS; y++) {
+                    for (int x = 0; x < TERM_COLS; x++) {
+                        term->cells[y][x].ch = ' ';
+                        term->cells[y][x].fg_color = term->current_fg;
+                        term->cells[y][x].bg_color = term->current_bg;
+                        term->cells[y][x].attrs = term->current_attrs;
+                    }
+                }
+            } else if (n == 1) {
+                // Clear from cursor to beginning of screen
+                // Clear all lines above cursor
+                for (int y = 0; y < term->cursor_y; y++) {
+                    for (int x = 0; x < TERM_COLS; x++) {
+                        term->cells[y][x].ch = ' ';
+                        term->cells[y][x].fg_color = term->current_fg;
+                        term->cells[y][x].bg_color = term->current_bg;
+                        term->cells[y][x].attrs = term->current_attrs;
+                    }
+                }
+                // Clear from beginning of current line to cursor
+                for (int x = 0; x <= term->cursor_x && x < TERM_COLS; x++) {
+                    term->cells[term->cursor_y][x].ch = ' ';
+                    term->cells[term->cursor_y][x].fg_color = term->current_fg;
+                    term->cells[term->cursor_y][x].bg_color = term->current_bg;
+                    term->cells[term->cursor_y][x].attrs = term->current_attrs;
+                }
+            } else if (n == 2) {
+                // Clear entire screen
                 terminal_clear(term);
             }
             break;
@@ -319,6 +380,21 @@ void terminal_handle_csi(Terminal *term) {
             }
             break;
         }
+        case 's': { // Save cursor position
+            term->saved_cursor_x = term->cursor_x;
+            term->saved_cursor_y = term->cursor_y;
+            break;
+        }
+        case 'u': { // Restore cursor position
+            term->cursor_x = term->saved_cursor_x;
+            term->cursor_y = term->saved_cursor_y;
+            // Clamp to valid range
+            if (term->cursor_x < 0) term->cursor_x = 0;
+            if (term->cursor_x >= TERM_COLS) term->cursor_x = TERM_COLS - 1;
+            if (term->cursor_y < 0) term->cursor_y = 0;
+            if (term->cursor_y >= TERM_ROWS) term->cursor_y = TERM_ROWS - 1;
+            break;
+        }
     }
 }
 
@@ -352,6 +428,11 @@ void terminal_parse_byte(Terminal *term, uint8_t byte) {
                 term->parse_state = PARSE_CSI;
                 term->csi_buffer_len = 0;
                 memset(term->csi_buffer, 0, sizeof(term->csi_buffer));
+            } else if (byte == 'c') {
+                // RIS - Reset to Initial State (ESC c)
+                terminal_init(term);
+                term->active = true;  // Keep terminal active
+                term->parse_state = PARSE_NORMAL;
             } else {
                 // Unknown escape sequence, ignore
                 term->parse_state = PARSE_NORMAL;
