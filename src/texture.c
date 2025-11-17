@@ -11,6 +11,8 @@ uint32_t ceiling_textures[NUM_CEIL_TEXTURES][TEX_SIZE * TEX_SIZE];
 uint32_t door_texture[TEX_SIZE * TEX_SIZE];
 uint32_t furniture_textures[NUM_FURNITURE_TYPES][TEX_SIZE * TEX_SIZE];
 uint32_t cabinet_texture[TEX_SIZE * TEX_SIZE];
+uint32_t sky_texture[SKY_TEXTURE_HEIGHT * SKY_TEXTURE_WIDTH];
+uint32_t display_texture[TEX_SIZE * TEX_SIZE];
 
 void generate_wall_textures(void) {
     for (int t = 0; t < NUM_WALL_TEXTURES; ++t) {
@@ -121,6 +123,66 @@ void generate_cabinet_texture(void) {
     }
 }
 
+void generate_sky_texture(void) {
+    // Space station aesthetic - starfield with nebula gradients
+    for (int y = 0; y < SKY_TEXTURE_HEIGHT; ++y) {
+        for (int x = 0; x < SKY_TEXTURE_WIDTH; ++x) {
+            // Vertical gradient - darker at top, lighter purple/blue at horizon
+            double v_gradient = (double)y / (double)SKY_TEXTURE_HEIGHT;
+
+            // Base color - deep space blue/purple
+            uint8_t base_r = (uint8_t)(10 + v_gradient * 30);
+            uint8_t base_g = (uint8_t)(5 + v_gradient * 20);
+            uint8_t base_b = (uint8_t)(25 + v_gradient * 40);
+
+            // Add some nebula-like variation using pseudo-random noise
+            unsigned int seed = (unsigned int)(x * 7 + y * 13);
+            seed = (seed * 1103515245u + 12345u) & 0x7fffffff;
+            double noise = (seed % 256) / 256.0;
+
+            // Stars - random bright pixels
+            if (noise > 0.98) {
+                uint8_t brightness = (uint8_t)(200 + noise * 55);
+                sky_texture[y * SKY_TEXTURE_WIDTH + x] = pack_color(brightness, brightness, brightness);
+            } else {
+                // Apply subtle color variation
+                uint8_t r = (uint8_t)(base_r + noise * 15);
+                uint8_t g = (uint8_t)(base_g + noise * 10);
+                uint8_t b = (uint8_t)(base_b + noise * 20);
+                sky_texture[y * SKY_TEXTURE_WIDTH + x] = pack_color(r, g, b);
+            }
+        }
+    }
+}
+
+void generate_display_texture(void) {
+    // Monitor/display frame - dark metallic with screen bezel
+    uint32_t frame = pack_color(40, 40, 50);     // Dark gray frame
+    uint32_t screen = pack_color(10, 15, 20);    // Very dark screen
+    uint32_t bezel = pack_color(60, 60, 70);     // Lighter bezel edge
+
+    for (int y = 0; y < TEX_SIZE; ++y) {
+        for (int x = 0; x < TEX_SIZE; ++x) {
+            uint32_t color = frame;
+
+            // Outer bezel (2 pixel border)
+            if (x < 2 || x >= TEX_SIZE - 2 || y < 2 || y >= TEX_SIZE - 2) {
+                color = bezel;
+            }
+            // Inner frame (4 pixel border)
+            else if (x < 6 || x >= TEX_SIZE - 6 || y < 6 || y >= TEX_SIZE - 6) {
+                color = frame;
+            }
+            // Screen area (will be replaced with terminal content during rendering)
+            else {
+                color = screen;
+            }
+
+            display_texture[y * TEX_SIZE + x] = color;
+        }
+    }
+}
+
 bool load_texture_from_bmp(const char *path, uint32_t *target) {
     if (!path || !*path || !target) {
         return false;
@@ -141,6 +203,32 @@ bool load_texture_from_bmp(const char *path, uint32_t *target) {
         for (int x = 0; x < TEX_SIZE; ++x) {
             int srcX = x * converted->w / TEX_SIZE;
             target[y * TEX_SIZE + x] = src[srcY * pitch + srcX];
+        }
+    }
+    SDL_FreeSurface(converted);
+    return true;
+}
+
+bool load_sky_texture_from_bmp(const char *path) {
+    if (!path || !*path) {
+        return false;
+    }
+    SDL_Surface *surface = SDL_LoadBMP(path);
+    if (!surface) {
+        return false;
+    }
+    SDL_Surface *converted = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_ARGB8888, 0);
+    SDL_FreeSurface(surface);
+    if (!converted) {
+        return false;
+    }
+    uint32_t *src = (uint32_t *)converted->pixels;
+    int pitch = converted->pitch / 4;
+    for (int y = 0; y < SKY_TEXTURE_HEIGHT; ++y) {
+        int srcY = y * converted->h / SKY_TEXTURE_HEIGHT;
+        for (int x = 0; x < SKY_TEXTURE_WIDTH; ++x) {
+            int srcX = x * converted->w / SKY_TEXTURE_WIDTH;
+            sky_texture[y * SKY_TEXTURE_WIDTH + x] = src[srcY * pitch + srcX];
         }
     }
     SDL_FreeSurface(converted);
@@ -173,4 +261,8 @@ void load_custom_textures(void) {
     }
     snprintf(path, sizeof(path), "assets/textures/cabinet.bmp");
     load_texture_from_bmp(path, cabinet_texture);
+    snprintf(path, sizeof(path), "assets/textures/sky.bmp");
+    load_sky_texture_from_bmp(path);
+    snprintf(path, sizeof(path), "assets/textures/display.bmp");
+    load_texture_from_bmp(path, display_texture);
 }

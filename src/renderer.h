@@ -14,6 +14,8 @@ int render_npcs(const Game *game, uint32_t *pixels, double dirX, double dirY, do
                 double *zbuffer);
 int render_cabinets(const Game *game, uint32_t *pixels, double dirX, double dirY, double planeX, double planeY,
                     double *zbuffer);
+int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY, double planeX, double planeY,
+                    double *zbuffer);
 void render_memory_plaques(const Game *game, uint32_t *pixels, double dirX, double dirY, double planeX, double planeY,
                             double *zbuffer);
 

@@ -32,6 +32,7 @@ SOURCES = src/main.c \
           src/furniture.c \
           src/npc.c \
           src/cabinet.c \
+          src/display.c \
           src/terminal.c \
           src/renderer.c \
           src/ui.c \

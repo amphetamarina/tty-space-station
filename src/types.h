@@ -42,6 +42,10 @@
 #define MAX_NPCS 32
 #define MAX_CABINETS 16
 #define MAX_TERMINALS 16
+#define MAX_DISPLAYS 32
+
+#define SKY_TEXTURE_WIDTH 512
+#define SKY_TEXTURE_HEIGHT 128
 
 #define clamp_int(value, min_value, max_value) \
     ((value) < (min_value) ? (min_value) : ((value) > (max_value) ? (max_value) : (value)))
@@ -194,6 +198,18 @@ typedef struct {
     int terminal_index;  // Index into game terminals array
 } CabinetEntry;
 
+// Display types (wall-mounted monitors)
+typedef struct {
+    int grid_x;
+    int grid_y;
+    double x;
+    double y;
+    double normal_x;  // Wall normal direction
+    double normal_y;
+    const char *name;
+    int terminal_index;  // Index into game terminals array
+} DisplayEntry;
+
 typedef struct {
     bool active;
     int targetX;
@@ -232,6 +248,8 @@ typedef struct {
     Terminal terminals[MAX_TERMINALS];
     CabinetEntry cabinets[MAX_CABINETS];
     int cabinet_count;
+    DisplayEntry displays[MAX_DISPLAYS];
+    int display_count;
     bool terminal_mode;
     int active_terminal;  // Which terminal is currently being viewed
 } Game;

@@ -78,6 +78,8 @@ int main(void) {
     generate_ceiling_textures();
     generate_furniture_textures();
     generate_cabinet_texture();
+    generate_sky_texture();
+    generate_display_texture();
     load_custom_textures();
 
     Game game;

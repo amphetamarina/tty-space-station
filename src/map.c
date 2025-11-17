@@ -174,7 +174,8 @@ char sanitize_tile(char c) {
     case 'X':
         return 'X';
     case 'D':
-        return 'D';
+    case 'd':
+        return c;
     case '1':
     case '2':
     case '3':
@@ -273,6 +274,13 @@ void map_store_char(Map *map, int x, int y, char raw) {
         map->tiles[y][x] = '.';
 #if DEBUG_MODE
         printf("[DEBUG] Cabinet marker '%c' stored at decor[%d][%d]\n", tile, y, x);
+#endif
+    } else if (tile == 'D' || tile == 'd') {
+        // Display decor characters
+        map->decor[y][x] = tile;
+        map->tiles[y][x] = '.';
+#if DEBUG_MODE
+        printf("[DEBUG] Display marker '%c' stored at decor[%d][%d]\n", tile, y, x);
 #endif
     } else {
         map->tiles[y][x] = tile;

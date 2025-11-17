@@ -5,6 +5,7 @@
 #include "furniture.h"
 #include "npc.h"
 #include "cabinet.h"
+#include "display.h"
 #include "terminal.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -180,6 +181,7 @@ void game_init(Game *game) {
     rebuild_furniture(game);
     rebuild_npcs(game);
     rebuild_cabinets(game);
+    rebuild_displays(game);
     if (custom_save && *custom_save) {
         snprintf(game->save_path, sizeof(game->save_path), "%s", custom_save);
         game->has_save_path = true;

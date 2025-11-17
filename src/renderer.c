@@ -315,108 +315,257 @@ int render_cabinets(const Game *game, uint32_t *pixels, double dirX, double dirY
     int crossX = SCREEN_WIDTH / 2;
     int crossY = SCREEN_HEIGHT / 2;
     int count = game->cabinet_count < MAX_CABINETS ? game->cabinet_count : MAX_CABINETS;
-    int order[MAX_CABINETS];
-    double distSq[MAX_CABINETS];
+
+    // Cabinet dimensions (oriented box aligned to grid)
+    double boxWidth = 0.8;   // X/Y size
+    double boxDepth = 0.5;   // Depth
+    double boxHeight = 1.2;  // Tall server cabinet
 
     for (int i = 0; i < count; ++i) {
-        order[i] = i;
-        double dx = game->cabinets[i].x - player->x;
-        double dy = game->cabinets[i].y - player->y;
-        distSq[i] = dx * dx + dy * dy;
-    }
+        const CabinetEntry *entry = &game->cabinets[i];
 
-    // Sort by distance (furthest first)
-    for (int i = 0; i < count - 1; ++i) {
-        for (int j = i + 1; j < count; ++j) {
-            if (distSq[i] < distSq[j]) {
-                double tmpD = distSq[i];
-                distSq[i] = distSq[j];
-                distSq[j] = tmpD;
-                int tmp = order[i];
-                order[i] = order[j];
-                order[j] = tmp;
-            }
-        }
-    }
+        // Render cabinet as a 3D box - scan each vertical stripe
+        // Cabinet is axis-aligned in grid space
+        double minX = entry->x - boxWidth / 2.0;
+        double maxX = entry->x + boxWidth / 2.0;
+        double minY = entry->y - boxDepth / 2.0;
+        double maxY = entry->y + boxDepth / 2.0;
 
-    // Two-pass rendering: first pass for hit detection, second for drawing
-    for (int pass = 0; pass < 2; ++pass) {
-        for (int ord = 0; ord < count; ++ord) {
-            int i = order[ord];
-            const CabinetEntry *entry = &game->cabinets[i];
+        // For each screen column, raycast to find if we hit the box
+        for (int x = 0; x < SCREEN_WIDTH; ++x) {
+            double cameraX = 2.0 * x / (double)SCREEN_WIDTH - 1.0;
+            double rayDirX = dirX + planeX * cameraX;
+            double rayDirY = dirY + planeY * cameraX;
 
-            double relX = entry->x - player->x;
-            double relY = entry->y - player->y;
-            double invDet = 1.0 / (planeX * dirY - dirX * planeY);
-            double transformX = invDet * (dirY * relX - dirX * relY);
-            double transformY = invDet * (-planeY * relX + planeX * relY);
+            // Check intersection with the 4 vertical faces of the box
+            double hitDist = 1e9;
+            int hitFace = -1;  // 0=front, 1=right, 2=back, 3=left
+            double hitTexU = 0;
 
-            if (transformY <= 0.1) {
-                continue;
-            }
-
-            int spriteScreenX = (int)((SCREEN_WIDTH / 2) * (1 + transformX / transformY));
-
-            // Cabinet dimensions
-            double worldHeight = 1.2;  // Tall cabinet
-            double worldWidth = 0.8;
-            int spriteHeight = abs((int)((SCREEN_HEIGHT / transformY) * worldHeight));
-            int spriteWidth = abs((int)((SCREEN_HEIGHT / transformY) * worldWidth));
-
-            if (spriteHeight < 4) spriteHeight = 4;
-            if (spriteWidth < 4) spriteWidth = 4;
-
-            int drawStartY = -spriteHeight / 2 + SCREEN_HEIGHT / 2;
-            int drawEndY = spriteHeight / 2 + SCREEN_HEIGHT / 2;
-            if (drawStartY < 0) drawStartY = 0;
-            if (drawEndY >= SCREEN_HEIGHT) drawEndY = SCREEN_HEIGHT - 1;
-
-            int drawStartX = -spriteWidth / 2 + spriteScreenX;
-            int drawEndX = spriteWidth / 2 + spriteScreenX;
-            if (drawStartX < 0) drawStartX = 0;
-            if (drawEndX >= SCREEN_WIDTH) drawEndX = SCREEN_WIDTH - 1;
-
-            if (drawStartX >= drawEndX || drawStartY >= drawEndY) {
-                continue;
+            // Face 0: Front face (Y = minY)
+            if (fabs(rayDirY) > 0.001) {
+                double t = (minY - player->y) / rayDirY;
+                if (t > 0.1) {
+                    double hitX = player->x + t * rayDirX;
+                    if (hitX >= minX && hitX <= maxX) {
+                        if (t < hitDist) {
+                            hitDist = t;
+                            hitFace = 0;
+                            hitTexU = (hitX - minX) / boxWidth;
+                        }
+                    }
+                }
             }
 
-            // First pass: check for crosshair hit
-            if (pass == 0) {
-                if (crossX >= drawStartX && crossX <= drawEndX &&
-                    crossY >= drawStartY && crossY <= drawEndY) {
-                    if (transformY < zbuffer[crossX] && transformY < highlightDepth) {
-                        highlightDepth = transformY;
+            // Face 1: Right face (X = maxX)
+            if (fabs(rayDirX) > 0.001) {
+                double t = (maxX - player->x) / rayDirX;
+                if (t > 0.1) {
+                    double hitY = player->y + t * rayDirY;
+                    if (hitY >= minY && hitY <= maxY) {
+                        if (t < hitDist) {
+                            hitDist = t;
+                            hitFace = 1;
+                            hitTexU = (hitY - minY) / boxDepth;
+                        }
+                    }
+                }
+            }
+
+            // Face 2: Back face (Y = maxY)
+            if (fabs(rayDirY) > 0.001) {
+                double t = (maxY - player->y) / rayDirY;
+                if (t > 0.1) {
+                    double hitX = player->x + t * rayDirX;
+                    if (hitX >= minX && hitX <= maxX) {
+                        if (t < hitDist) {
+                            hitDist = t;
+                            hitFace = 2;
+                            hitTexU = (maxX - hitX) / boxWidth;
+                        }
+                    }
+                }
+            }
+
+            // Face 3: Left face (X = minX)
+            if (fabs(rayDirX) > 0.001) {
+                double t = (minX - player->x) / rayDirX;
+                if (t > 0.1) {
+                    double hitY = player->y + t * rayDirY;
+                    if (hitY >= minY && hitY <= maxY) {
+                        if (t < hitDist) {
+                            hitDist = t;
+                            hitFace = 3;
+                            hitTexU = (maxY - hitY) / boxDepth;
+                        }
+                    }
+                }
+            }
+
+            // If we hit a face, render it
+            if (hitFace >= 0 && hitDist < zbuffer[x]) {
+                zbuffer[x] = hitDist;
+
+                // Calculate wall height on screen
+                int wallHeight = (int)(SCREEN_HEIGHT / hitDist * boxHeight);
+                if (wallHeight < 1) wallHeight = 1;
+
+                int drawStartY = -wallHeight / 2 + SCREEN_HEIGHT / 2;
+                int drawEndY = wallHeight / 2 + SCREEN_HEIGHT / 2;
+                if (drawStartY < 0) drawStartY = 0;
+                if (drawEndY >= SCREEN_HEIGHT) drawEndY = SCREEN_HEIGHT - 1;
+
+                // Check for crosshair hit
+                if (x == crossX && crossY >= drawStartY && crossY <= drawEndY) {
+                    if (hitDist < highlightDepth) {
+                        highlightDepth = hitDist;
                         highlight = i;
                     }
                 }
-                continue;
-            }
 
-            // Second pass: render the sprite
-            for (int stripe = drawStartX; stripe <= drawEndX; ++stripe) {
-                if (stripe < 0 || stripe >= SCREEN_WIDTH) continue;
-                if (transformY >= zbuffer[stripe]) continue;
+                // Texture coordinates
+                int texX = (int)(hitTexU * TEX_SIZE) & (TEX_SIZE - 1);
 
-                int texX = (int)((double)(stripe - drawStartX) / (double)(spriteWidth ? spriteWidth : 1) * TEX_SIZE);
-                if (texX < 0) texX = 0;
-                if (texX >= TEX_SIZE) texX = TEX_SIZE - 1;
-
+                // Render vertical stripe
                 for (int y = drawStartY; y <= drawEndY; ++y) {
-                    if (y < 0 || y >= SCREEN_HEIGHT) continue;
-
-                    int texY = (int)((double)(y - drawStartY) / (double)(spriteHeight ? spriteHeight : 1) * TEX_SIZE);
-                    if (texY < 0) texY = 0;
-                    if (texY >= TEX_SIZE) texY = TEX_SIZE - 1;
+                    double texYf = (double)(y - drawStartY) / (double)wallHeight;
+                    int texY = (int)(texYf * TEX_SIZE) & (TEX_SIZE - 1);
 
                     uint32_t color = cabinet_texture[texY * TEX_SIZE + texX];
 
-                    // Highlight if this is the targeted cabinet
+                    // Darken side faces for depth perception
+                    if (hitFace == 1 || hitFace == 3) {
+                        color = blend_colors(color, pack_color(0, 0, 0), 0.3);
+                    }
+
+                    // Highlight if targeted
                     if (i == highlight) {
                         color = blend_colors(color, pack_color(255, 255, 255), 0.35);
                     }
 
-                    draw_pixel(pixels, stripe, y, color);
+                    draw_pixel(pixels, x, y, color);
                 }
+            }
+        }
+    }
+    return highlight;
+}
+
+int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY, double planeX, double planeY,
+                    double *zbuffer) {
+    const Player *player = &game->player;
+    int highlight = -1;
+    double highlightDepth = 1e9;
+    int crossX = SCREEN_WIDTH / 2;
+    int crossY = SCREEN_HEIGHT / 2;
+    int count = game->display_count < MAX_DISPLAYS ? game->display_count : MAX_DISPLAYS;
+
+    for (int i = 0; i < count; ++i) {
+        const DisplayEntry *display = &game->displays[i];
+
+        // Position display slightly offset from wall based on normal
+        double worldX = display->x + display->normal_x * 0.1;
+        double worldY = display->y + display->normal_y * 0.1;
+
+        double relX = worldX - player->x;
+        double relY = worldY - player->y;
+        double invDet = 1.0 / (planeX * dirY - dirX * planeY);
+        double transformX = invDet * (dirY * relX - dirX * relY);
+        double transformY = invDet * (-planeY * relX + planeX * relY);
+
+        if (transformY <= 0.1) {
+            continue;
+        }
+
+        int spriteScreenX = (int)((SCREEN_WIDTH / 2) * (1 + transformX / transformY));
+
+        // Display dimensions
+        double worldWidth = 0.6;
+        double worldHeight = 0.5;
+        int spriteHeight = abs((int)((SCREEN_HEIGHT / transformY) * worldHeight));
+        int spriteWidth = abs((int)((SCREEN_HEIGHT / transformY) * worldWidth));
+
+        if (spriteHeight < 4) spriteHeight = 4;
+        if (spriteWidth < 4) spriteWidth = 4;
+
+        int drawStartY = -spriteHeight / 2 + SCREEN_HEIGHT / 2;
+        int drawEndY = spriteHeight / 2 + SCREEN_HEIGHT / 2;
+        if (drawStartY < 0) drawStartY = 0;
+        if (drawEndY >= SCREEN_HEIGHT) drawEndY = SCREEN_HEIGHT - 1;
+
+        int drawStartX = -spriteWidth / 2 + spriteScreenX;
+        int drawEndX = spriteWidth / 2 + spriteScreenX;
+        if (drawStartX < 0) drawStartX = 0;
+        if (drawEndX >= SCREEN_WIDTH) drawEndX = SCREEN_WIDTH - 1;
+
+        if (drawStartX >= drawEndX || drawStartY >= drawEndY) {
+            continue;
+        }
+
+        // Check for crosshair hit
+        if (crossX >= drawStartX && crossX <= drawEndX &&
+            crossY >= drawStartY && crossY <= drawEndY) {
+            if (transformY < zbuffer[crossX] && transformY < highlightDepth) {
+                highlightDepth = transformY;
+                highlight = i;
+            }
+        }
+
+        // Get terminal for this display
+        const Terminal *term = NULL;
+        if (display->terminal_index >= 0 && display->terminal_index < MAX_TERMINALS) {
+            term = &game->terminals[display->terminal_index];
+        }
+
+        // Render the display
+        for (int stripe = drawStartX; stripe <= drawEndX; ++stripe) {
+            if (stripe < 0 || stripe >= SCREEN_WIDTH) continue;
+            if (transformY >= zbuffer[stripe]) continue;
+
+            int texX = (int)((double)(stripe - drawStartX) / (double)(spriteWidth ? spriteWidth : 1) * TEX_SIZE);
+            if (texX < 0) texX = 0;
+            if (texX >= TEX_SIZE) texX = TEX_SIZE - 1;
+
+            for (int y = drawStartY; y <= drawEndY; ++y) {
+                if (y < 0 || y >= SCREEN_HEIGHT) continue;
+
+                int texY = (int)((double)(y - drawStartY) / (double)(spriteHeight ? spriteHeight : 1) * TEX_SIZE);
+                if (texY < 0) texY = 0;
+                if (texY >= TEX_SIZE) texY = TEX_SIZE - 1;
+
+                uint32_t color = display_texture[texY * TEX_SIZE + texX];
+
+                // If this is in the screen area (not frame) and we have a terminal, show terminal content
+                if (term && term->active && texX >= 6 && texX < TEX_SIZE - 6 && texY >= 6 && texY < TEX_SIZE - 6) {
+                    // Map texture coordinates to terminal character grid
+                    int screenTexX = texX - 6;
+                    int screenTexY = texY - 6;
+                    int screenWidth = TEX_SIZE - 12;
+                    int screenHeight = TEX_SIZE - 12;
+
+                    int termX = (screenTexX * TERM_COLS) / screenWidth;
+                    int termY = (screenTexY * TERM_ROWS) / screenHeight;
+
+                    if (termX >= 0 && termX < TERM_COLS && termY >= 0 && termY < TERM_ROWS) {
+                        const TermCell *cell = &term->cells[termY][termX];
+
+                        // Simple character rendering - use background color if char is space or non-printable
+                        if (cell->ch > 32 && cell->ch < 127) {
+                            // Foreground color (simplified - use white for now)
+                            color = pack_color(200, 200, 200);
+                        } else {
+                            // Background color (dark)
+                            color = pack_color(10, 15, 20);
+                        }
+                    }
+                }
+
+                // Highlight if this is the targeted display
+                if (i == highlight) {
+                    color = blend_colors(color, pack_color(255, 255, 100), 0.25);
+                }
+
+                draw_pixel(pixels, stripe, y, color);
             }
         }
     }
@@ -501,6 +650,29 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
     double planeX = -sin(player->angle) * tan(player->fov / 2.0);
     double planeY = cos(player->angle) * tan(player->fov / 2.0);
 
+    // Render sky first (Doom-style cylindrical panorama)
+    for (int y = 0; y < SCREEN_HEIGHT / 2; ++y) {
+        for (int x = 0; x < SCREEN_WIDTH; ++x) {
+            // Calculate horizontal angle for this column
+            double cameraX = 2.0 * x / (double)SCREEN_WIDTH - 1.0;
+            double columnAngle = atan2(dirY + planeY * cameraX, dirX + planeX * cameraX);
+
+            // Normalize angle to [0, 2*PI]
+            while (columnAngle < 0) columnAngle += 2.0 * M_PI;
+            while (columnAngle >= 2.0 * M_PI) columnAngle -= 2.0 * M_PI;
+
+            // Map angle to texture X coordinate (wrapping horizontally)
+            int skyX = (int)(columnAngle / (2.0 * M_PI) * SKY_TEXTURE_WIDTH) % SKY_TEXTURE_WIDTH;
+
+            // Map screen Y to texture Y coordinate (vertical gradient)
+            int skyY = (y * SKY_TEXTURE_HEIGHT) / (SCREEN_HEIGHT / 2);
+            if (skyY >= SKY_TEXTURE_HEIGHT) skyY = SKY_TEXTURE_HEIGHT - 1;
+
+            uint32_t skyColor = sky_texture[skyY * SKY_TEXTURE_WIDTH + skyX];
+            pixels[y * SCREEN_WIDTH + x] = skyColor;
+        }
+    }
+
     double rayDirX0 = dirX - planeX;
     double rayDirY0 = dirY - planeY;
     double rayDirX1 = dirX + planeX;
@@ -524,19 +696,11 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
             int texX = (int)(fracX * TEX_SIZE) & (TEX_SIZE - 1);
             int texY = (int)(fracY * TEX_SIZE) & (TEX_SIZE - 1);
             uint32_t floorColor = pack_color(50, 40, 30);
-            uint32_t ceilingColor = pack_color(20, 20, 40);
             if (cellX >= 0 && cellX < game->map.width && cellY >= 0 && cellY < game->map.height) {
                 int floorIdx = floor_index_for_char(game->map.tiles[cellY][cellX]);
-                int ceilIdx =
-                    ((cellX + cellY) % NUM_CEIL_TEXTURES + NUM_CEIL_TEXTURES) % NUM_CEIL_TEXTURES;
                 floorColor = floor_textures[floorIdx][texY * TEX_SIZE + texX];
-                ceilingColor = ceiling_textures[ceilIdx][texY * TEX_SIZE + texX];
             }
             pixels[y * SCREEN_WIDTH + x] = floorColor;
-            int mirrorY = SCREEN_HEIGHT - y - 1;
-            if (mirrorY >= 0 && mirrorY < SCREEN_HEIGHT) {
-                pixels[mirrorY * SCREEN_WIDTH + x] = ceilingColor;
-            }
             floorX += floorStepX;
             floorY += floorStepY;
         }
@@ -699,6 +863,7 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
     int furnitureHighlight = render_furniture(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
     int npcHighlight = render_npcs(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
     int cabinetHighlight = render_cabinets(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
+    int displayHighlight = render_displays(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
     render_memory_plaques(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
 
     int crossX = SCREEN_WIDTH / 2;
@@ -734,6 +899,20 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
                 labelX = SCREEN_WIDTH - 10 - labelWidth;
             }
             draw_text(pixels, labelX, crossY + 40, name, pack_color(150, 255, 180));
+        }
+    } else if (displayHighlight >= 0 && displayHighlight < game->display_count) {
+        const DisplayEntry *entry = &game->displays[displayHighlight];
+        const char *name = entry->name;
+        if (name && *name) {
+            int labelWidth = (int)strlen(name) * 8;
+            int labelX = crossX - labelWidth / 2;
+            if (labelX < 10) {
+                labelX = 10;
+            }
+            if (labelX + labelWidth >= SCREEN_WIDTH - 10) {
+                labelX = SCREEN_WIDTH - 10 - labelWidth;
+            }
+            draw_text(pixels, labelX, crossY + 40, name, pack_color(100, 200, 255));
         }
     } else if (furnitureHighlight >= 0 && furnitureHighlight < game->furniture_count) {
         const FurnitureEntry *entry = &game->furniture[furnitureHighlight];
