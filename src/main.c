@@ -14,12 +14,37 @@
 #include <time.h>
 #include <math.h>
 #include <string.h>
+#include <signal.h>
+#include <execinfo.h>
+#include <unistd.h>
 
 typedef struct {
     SDL_Window *window;
     SDL_Renderer *renderer;
     SDL_Texture *framebuffer;
 } Video;
+
+// Signal handler for debugging crashes
+static void signal_handler(int sig) {
+    fprintf(stderr, "\n[CRASH] Signal %d caught!\n", sig);
+
+    if (sig == SIGILL) {
+        fprintf(stderr, "[CRASH] Illegal instruction (SIGILL)\n");
+        fprintf(stderr, "[CRASH] This typically means:\n");
+        fprintf(stderr, "[CRASH]   - Invalid memory access\n");
+        fprintf(stderr, "[CRASH]   - Unaligned pointer access\n");
+        fprintf(stderr, "[CRASH]   - Bad function pointer call\n");
+        fprintf(stderr, "[CRASH]   - Corrupted stack\n");
+    }
+
+    // Print backtrace
+    void *buffer[100];
+    int nptrs = backtrace(buffer, 100);
+    fprintf(stderr, "[CRASH] Backtrace (%d frames):\n", nptrs);
+    backtrace_symbols_fd(buffer, nptrs, STDERR_FILENO);
+
+    exit(EXIT_FAILURE);
+}
 
 static bool video_init(Video *video) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
@@ -66,6 +91,12 @@ static void video_destroy(Video *video) {
 }
 
 int main(void) {
+    // Install signal handlers for better crash debugging
+    signal(SIGILL, signal_handler);   // Illegal instruction
+    signal(SIGSEGV, signal_handler);  // Segmentation fault
+    signal(SIGABRT, signal_handler);  // Abort
+    signal(SIGFPE, signal_handler);   // Floating point exception
+
     srand((unsigned)time(NULL));
     Video video = {0};
     if (!video_init(&video)) {
