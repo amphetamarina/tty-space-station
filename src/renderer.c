@@ -561,7 +561,7 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
     }
     if (cabinetHighlight >= 0 && cabinetHighlight < game->cabinet_count) {
         const CabinetEntry *entry = &game->cabinets[cabinetHighlight];
-        const char *name = entry->name;
+        const char *name = get_cabinet_display_name(entry);
         if (name && *name) {
             int labelWidth = (int)strlen(name) * 8;
             int labelX = crossX - labelWidth / 2;
