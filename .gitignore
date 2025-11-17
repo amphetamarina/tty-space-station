@@ -1,0 +1,16 @@
+# Build artifacts
+*.o
+poom
+mapeditor
+
+# Memory save files
+*.mem
+
+# Backup files
+*~
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
