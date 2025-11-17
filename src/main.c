@@ -3,10 +3,8 @@
 #include "texture.h"
 #include "game.h"
 #include "map.h"
-#include "memory.h"
 #include "player.h"
 #include "renderer.h"
-#include "npc.h"
 #include "cabinet.h"
 #include "display.h"
 #include "terminal.h"
@@ -77,7 +75,6 @@ int main(void) {
     generate_wall_textures();
     generate_floor_textures();
     generate_ceiling_textures();
-    generate_furniture_textures();
     generate_cabinet_texture();
     generate_sky_texture();
     generate_display_texture();
@@ -100,8 +97,6 @@ int main(void) {
                 if (game.terminal_mode && game.active_terminal >= 0 && game.active_terminal < MAX_TERMINALS) {
                     // Send text input to terminal
                     terminal_write(&game.terminals[game.active_terminal], event.text.text, strlen(event.text.text));
-                } else if (game.input.active) {
-                    handle_memory_text(&game, event.text.text);
                 }
             } else if (event.type == SDL_KEYDOWN) {
                 SDL_Keycode sym = event.key.keysym.sym;
@@ -197,69 +192,11 @@ int main(void) {
                     continue;
                 }
 
-                if (game.input.active) {
-                    if (sym == SDLK_BACKSPACE) {
-                        memory_backspace(&game);
-                        continue;
-                    }
-                    if (!event.key.repeat) {
-                        if (sym == SDLK_RETURN) {
-                            if (event.key.keysym.mod & KMOD_SHIFT) {
-                                if (game.input.length < MEMORY_TEXT - 1) {
-                                    game.input.buffer[game.input.length++] = '\n';
-                                    game.input.buffer[game.input.length] = '\0';
-                                }
-                            } else {
-                                finalize_memory_input(&game);
-                            }
-                        } else if (sym == SDLK_ESCAPE) {
-                            cancel_memory_input(&game);
-                        }
-                    }
-                    continue;
-                }
-                if (game.dialogue_active) {
-                    if (!event.key.repeat) {
-                        if (sym == SDLK_ESCAPE || sym == SDLK_e || sym == SDLK_n) {
-                            close_npc_dialogue(&game);
-                        }
-                    }
-                    continue;
-                }
-                if (game.viewer_active) {
-                    if (!event.key.repeat) {
-                        if (sym == SDLK_ESCAPE) {
-                            close_memory_view(&game);
-                        } else if (sym == SDLK_e) {
-                            begin_memory_edit(&game, game.viewer_index);
-                        } else if (sym == SDLK_DELETE) {
-                            game.viewer_delete_prompt = true;
-                            set_hud_message(&game, "Delete memory? Y to confirm, N to cancel.");
-                        } else if (sym == SDLK_y && game.viewer_delete_prompt) {
-                            delete_memory(&game, game.viewer_index);
-                            close_memory_view(&game);
-                        } else if (sym == SDLK_n && game.viewer_delete_prompt) {
-                            game.viewer_delete_prompt = false;
-                        }
-                    }
-                    continue;
-                }
                 if (!event.key.repeat) {
                     if (sym == SDLK_ESCAPE) {
                         running = false;
-                    } else if (sym == SDLK_m) {
-                        begin_memory_input(&game);
-                    } else if (sym == SDLK_f) {
-                        interact_with_door(&game);
-                    } else if (sym == SDLK_v) {
-                        int idx;
-                        if (target_memory(&game, &idx)) {
-                            open_memory_view(&game, idx);
-                        } else {
-                            set_hud_message(&game, "Aim at a memory plaque to view it.");
-                        }
                     } else if (sym == SDLK_e) {
-                        // E key: Check for display first, then NPC
+                        // E key: Activate display
                         double rayX = game.player.x + cos(game.player.angle) * 1.5;
                         double rayY = game.player.y + sin(game.player.angle) * 1.5;
                         int gx = (int)rayX;
@@ -268,12 +205,7 @@ int main(void) {
                         int disp_idx = find_display_at(&game, gx, gy);
                         if (disp_idx >= 0) {
                             activate_display(&game, disp_idx);
-                        } else {
-                            // No display found, try NPC interaction
-                            interact_with_npc(&game);
                         }
-                    } else if (sym == SDLK_n) {
-                        interact_with_npc(&game);
                     } else if (sym == SDLK_u) {
                         // Activate cabinet - find cabinet player is facing
                         double rayX = game.player.x + cos(game.player.angle) * 1.5;
@@ -309,7 +241,7 @@ int main(void) {
         double delta = (currentTicks - lastTicks) / 1000.0;
         lastTicks = currentTicks;
 
-        if (!game.input.active && !game.viewer_active && !game.dialogue_active && !game.terminal_mode) {
+        if (!game.terminal_mode) {
             if (state[SDL_SCANCODE_W]) {
                 move_player(&game, cos(game.player.angle) * MOVE_SPEED * delta,
                             sin(game.player.angle) * MOVE_SPEED * delta);
@@ -344,20 +276,10 @@ int main(void) {
             }
         }
 
-        // Update terminals (only the active one in terminal mode, or all in background)
+        // Update only the active terminal when in terminal mode
         if (game.terminal_mode && game.active_terminal >= 0 && game.active_terminal < MAX_TERMINALS) {
-            // In terminal mode, only update the active terminal
             terminal_update(&game.terminals[game.active_terminal]);
-        } else {
-            // In normal mode, update all active display terminals
-            for (int i = 0; i < MAX_TERMINALS; i++) {
-                if (game.terminals[i].active && game.terminals[i].pty_fd > 0) {
-                    terminal_update(&game.terminals[i]);
-                }
-            }
         }
-
-        npc_update_ai(&game, delta);
 
         // Decrement skip counter
         if (game.skip_display_frames > 0) {
@@ -379,9 +301,6 @@ int main(void) {
 
     free(pixels);
     free(zbuffer);
-    if (game.has_save_path) {
-        save_memories(&game);
-    }
     game_cleanup_terminals(&game);
     game_free_game_maps(&game);
     map_free(&game.map);

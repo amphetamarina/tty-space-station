@@ -1,239 +1,276 @@
-# poom
+# TTY Space Station
 
-Palace of organized memories.
+> ⚠️ **ALPHA SOFTWARE** - This project is highly experimental and under active development. Expect bugs, crashes, and breaking changes!
 
-POOM is a lightweight, Doom2-inspired memory palace rendered with SDL2.
-Walk a tile-based maze, drop custom “memory buildings”, and recall their text
-as you revisit them. The engine ray-casts a pseudo-3D corridor with coherent
-wall themes, textured floors/ceilings, HUD overlays, a minimap, and an in-game
-text UI. Every memory appears as a glowing plaque embedded in the wall.
+A Doom-style 3D raycasting game where you explore a space station filled with functional Unix terminals. Walk through corridors, interact with server cabinets, and use wall-mounted displays - all with real embedded terminal emulation.
+
+![Status: Alpha](https://img.shields.io/badge/status-alpha-orange)
+![Platform: Linux/macOS](https://img.shields.io/badge/platform-linux%20%7C%20macos-blue)
+
+## What is This?
+
+TTY Space Station combines retro first-person raycasting graphics (think Wolfenstein 3D or classic Doom) with functional Unix terminal emulation. Explore a cyberpunk space station where:
+
+- **Server Cabinets** open real bash/shell sessions
+- **Wall-mounted Displays** show terminal output (currently disabled due to bugs)
+- **Fully explorable 3D environment** with Doom-style rendering
+- **Real PTY terminal emulation** with ANSI/VT100 support
+
+Think of it as a 3D terminal multiplexer meets classic FPS.
+
+## Features
+
+### Terminal Emulation
+- Full PTY-based real shell sessions (bash/sh)
+- ANSI/VT100 escape sequence support
+- 16-color terminal display
+- Ctrl+key combinations (Ctrl+C, Ctrl+D, etc.)
+- Works with vim, emacs, htop, and other terminal apps
+- Each cabinet maintains its own persistent session
+
+### Graphics & Rendering
+- Raycasting 3D engine (Doom/Wolfenstein style)
+- Textured walls, floors, and ceilings
+- Doom-style cylindrical sky panorama (starfield)
+- 3D server cabinets (4 texture variations)
+- Wall-mounted terminal displays
+- Minimap with real-time position tracking
+- Smooth movement and rotation
+
+### Map System
+- Variable map sizes (10x10 to 100x100)
+- Custom map loading from `.map` files
+- Procedural maze generation (fallback)
+- Doors that open/close
+- Display stacking for larger screens
+- GUI map editor included
 
 ## Building
 
-First install the SDL2 development package (`libsdl2-dev` on Debian/Ubuntu, `sdl2` on Arch,
-`SDL2` via Homebrew on macOS).
+### Prerequisites
+
+Install SDL2 development package:
+- **Debian/Ubuntu**: `sudo apt install libsdl2-dev`
+- **Arch Linux**: `sudo pacman -S sdl2`
+- **macOS**: `brew install sdl2`
+
+### Compile
 
 ```bash
-make           # builds ./poom (requires SDL2 headers/libs)
-make run       # builds (if needed) and launches the game
+make           # builds ./tty-space-station
+make run       # build and launch immediately
+make editor    # launch the map editor
 ```
 
-Linux (X11/Wayland) and macOS are supported. The SDL build opens a resizable window;
-close it or press `Esc` to exit. When adding a memory the game pauses and a prompt
-appears in the terminal where POOM was launched.
+Linux (X11/Wayland) and macOS are supported.
 
 ## Controls
 
-- `W` / `S` – move forward and backward
-- `A` / `D` or Left/Right arrows – rotate the camera
-- `Q` / `E` – strafe left and right
-- `M` – point the crosshair at a wall, then type the memory text directly in-game
-- `V` – inspect the plaque you're aiming at (full-screen view, edit, delete)
-- `E` / `N` – interact with NPCs (talk to puppy or ghost)
-- `U` – activate server cabinet (opens terminal session)
-- `F` – toggle doors you are aiming at
-- `Esc` – quit the game, close dialogue, or exit terminal
+### Movement
+- `W` / `S` - Move forward/backward
+- `A` / `D` - Rotate camera left/right
+- `Q` / `E` - Strafe left/right
+- `Arrow Keys` - Also rotate camera
+- `ESC` - Quit game
 
-### Terminal Controls (when in terminal mode):
-- `ESC` – exit terminal and return to game
-- `Enter` – send command to shell
-- `Backspace`, `Tab`, `Arrow Keys` – standard shell navigation
-- All keyboard input is sent to the shell session
+### Interaction
+- `U` - Activate server cabinet (when facing one)
+- `E` - Activate wall display (when facing one)
+- `F` - Toggle door (when facing one)
 
-Step near a memory plaque to see its contents in the HUD overlay and on the minimap.
-Up to 96 memories can be stored per session.
+### Terminal Mode Controls
+When inside a terminal (after pressing `U` on a cabinet):
 
-### Memory entry UI
+- **F1** - Exit terminal and return to game
+- `Enter` - Send command
+- `Backspace`, `Tab` - Standard keys
+- `Arrow Keys` - Command history / cursor movement
+- `Ctrl+A` through `Ctrl+Z` - Full Ctrl combinations
+- `Delete`, `Home`, `End`, `PageUp`, `PageDown` - Navigation keys
+- `ESC` - Sends ESC to terminal (for vim, etc.)
 
-After pressing `M`, the camera pauses and a text box appears in the middle of the
-screen. Aim at a wall, type up to 159 characters, press `Enter` to confirm, or
-`Esc` to cancel. `Shift+Enter` inserts a newline so you can craft multi-line
-descriptions, and each note is rendered as a framed plaque on the wall you selected.
-Point at an existing plaque and press `V` for a full-screen viewer where you can
-press `E` to edit or `Delete` to remove the entry.
+**Note**: Exit terminal with `F1`, not `ESC` - this allows vim and other apps to work properly!
 
-### Persistence
+## Custom Maps
 
-When you load a map from disk, POOM automatically restores memories from a
-companion `*.mem` file (e.g., `palace.map.mem`) and saves new entries there on
-the fly. Extra controls:
+Maps are text files defining the station layout. Default map: `maps/palace.map`
 
-- Set `POOM_SAVE_FILE=/path/to/memories.mem` to override the save path.
-- Set `POOM_GENERATED_MAP=/path/to/new_palace.map` to export procedurally
-  generated mazes and keep their notes between runs (POOM writes `*.mem` beside it).
+### Map Tile Reference
 
-## NPCs and Interaction
+**Walls:**
+- `1`, `2`, `3` - Different wall textures
+- `4` - Window wall (semi-transparent)
 
-POOM now features interactive NPCs that bring life to your memory palace:
+**Floors:**
+- `.` - Floor texture 0
+- `,` - Floor texture 1
+- `;` - Floor texture 2
 
-- **Puppy** (`P` in maps) - A friendly companion that wanders around. Woof!
-- **Ghost** (`G` in maps) - A mysterious translucent entity that haunts your palace
+**Interactive:**
+- `D` - Door (toggle with `F`)
+- `C` - Server cabinet (activate with `U`)
+- `d` - Wall-mounted display (activate with `E`)
 
-NPCs have basic AI with idle, wander, and talk states. They avoid walls and furniture,
-move around the palace, and can be interacted with by aiming at them and pressing `E` or `N`.
-Each NPC has unique dialogue and personality. NPCs are rendered with Doom-style angle-based
-sprites that change appearance based on your viewing angle (8 directions).
+**Special:**
+- `X` - Player spawn point
+- ` ` (space) - Empty/void
 
-## Server Cabinets & Embedded Terminals
+### Display Stacking
 
-POOM features **embedded terminal emulation** - you can place server cabinets in your memory palace that open real shell sessions!
+Place displays adjacent to each other to create larger screens:
+```
+DDD    Creates a 3-wide display
+DDD    stacked 2 tiles high
+```
 
-- **Server Cabinet** (`C` in maps) - Interactive terminal access points
-- Press `U` when facing a cabinet to activate it
-- Opens a full-screen terminal with real bash/sh shell
-- Each cabinet maintains its own persistent session
-- Full ANSI/VT100 terminal emulation with 16-color support
-- Use terminals for:
-  - Running commands and scripts
-  - Managing files and processes
-  - Organizing development workflows
-  - Creating your perfect "memory palace server room"
+Displays only stack horizontally (when facing up/down) or vertically (when facing left/right).
 
-Press `ESC` to exit terminal mode and return to the game. The shell session remains active in the background.
-
-**Terminal Features:**
-- 80x24 character display
-- Full ANSI color support
-- PTY (pseudo-terminal) with real shell process
-- Arrow keys for command history
-- Tab completion
-- All standard bash/shell features
-
-**Example:** Create a memory palace with server cabinets at strategic locations - each one a portal to different development environments, tmux sessions, or system administration tasks.
-
-## Custom maps
-
-A default layout is stored in `maps/palace.map`. Floors accept `.`, `,`, or `;` to pick
-between `floor0/1/2.bmp`. Walls use `1`, `2`, `3` (standard) or `4` (window, tied
-to `wall3.bmp`, rendered semi-transparent). Use `D` for a door (toggled with `F`)
-and `X` for a spawn point.
-
-Furniture glyphs let you decorate and add collision: `T`/`t` drop a square table
-(lowercase rotates it), `R` a round table, `B` a bed, `S` a sofa, and `W` a wardrobe.
-
-NPCs can be placed with: `P` for a puppy, `G` for a ghost.
-
-Server cabinets: `C` for a terminal access point.
-
-All props, NPCs, and cabinets block movement, show up on the minimap, and highlight their name
-when you aim at them. Edit the file or point the game to a different map path:
+### Load Custom Maps
 
 ```bash
-POOM_MAP_FILE=~/my_palace.map ./poom
+TSS_MAP_FILE=~/my_station.map ./tty-space-station
 ```
 
 If no map is provided, a random maze is generated at runtime.
 
-### Map Editor
+### Export Generated Maps
 
-POOM includes a graphical map editor for easy map creation:
+```bash
+TSS_GENERATED_MAP=~/generated.map ./tty-space-station
+```
+
+## Map Editor
+
+A graphical map editor is included for easy map creation:
 
 ```bash
 # Build the editor
 make mapeditor
 
-# Edit an existing map
+# Edit existing map
 ./mapeditor maps/palace.map
 
-# Create a new map with custom dimensions
-./mapeditor maps/newmap.map 60 40
+# Create new map with custom size
+./mapeditor maps/newstation.map 60 40
 
-# Quick launch
+# Quick launch with default map
 make editor
 ```
 
-The map editor provides:
-- **Point-and-click editing** with visual tile palette
-- **Support for all tile types** (walls, floors, doors, furniture, NPCs)
-- **Variable map sizes** from 10x10 to 100x100
-- **Color-coded tiles** matching their in-game appearance
-- **Grid overlay** for precision
-- **Pan and zoom** for large maps
-- **Real-time preview** as you edit
+See `tools/README.md` for detailed editor usage.
 
-See `tools/README.md` for detailed editor documentation.
+## Custom Textures
 
-## Custom textures & assets
+Drop optional 64×64 BMP textures into `assets/textures/` to override procedural textures:
 
-Drop optional BMP textures into `assets/textures/` to override the procedural materials:
+**Walls:**
+- `wall0.bmp`, `wall1.bmp`, `wall2.bmp`, `wall3.bmp`
 
-- `assets/textures/wall0.bmp`, `wall1.bmp`, `wall2.bmp`, `wall3.bmp`
-- `assets/textures/floor0.bmp`, `floor1.bmp`, `floor2.bmp`
-- `assets/textures/ceiling0.bmp`, `ceiling1.bmp`
-- `assets/textures/table_square.bmp`, `table_round.bmp`, `bed.bmp`, `sofa.bmp`, `wardrobe.bmp`
-- `assets/textures/door.bmp`
+**Floors/Ceilings:**
+- `floor0.bmp`, `floor1.bmp`, `floor2.bmp`
+- `ceiling0.bmp`, `ceiling1.bmp`
 
-Future NPC sprites can be placed in `assets/sprites/` for custom appearances.
+**Objects:**
+- `door.bmp`
+- `cabinet.bmp`, `cabinet1.bmp`, `cabinet2.bmp`, `cabinet3.bmp`
+- `display.bmp`
 
-Images are scaled to 64×64; missing files fall back to the built-in art. Great
-free sources for retro walls/floors include:
+**Sky:**
+- `sky.bmp` (512×128 cylindrical panorama)
 
-- [Kenney Assets](https://www.kenney.nl/assets) (CC0/CC-BY tilesets)
-- [OpenGameArt.org](https://opengameart.org/) (community textures/sprites)
-- [Freedoom](https://freedoom.github.io/) (GPL Doom-compatible graphics)
+Missing files fall back to built-in procedural generation.
 
-Convert PNG/JPG textures to BMP (e.g., `convert file.png file.bmp`) before
-placing them here so SDL can load them without extra libraries.
+### Texture Resources
 
-## Code Organization
+- [Kenney Assets](https://www.kenney.nl/assets) - CC0/CC-BY tilesets
+- [OpenGameArt.org](https://opengameart.org/) - Community textures
+- [Freedoom](https://freedoom.github.io/) - GPL Doom-compatible graphics
 
-The codebase has been reorganized into clean, modular components for better maintainability:
+Convert PNG/JPG to BMP: `convert texture.png texture.bmp`
 
-### Directory Structure
+## Project Structure
+
 ```
-poom/
-├── src/              # Source files
+tty-space-station/
+├── src/              # Source code
 │   ├── main.c        # Entry point and event loop
 │   ├── game.c/h      # Game state management
 │   ├── player.c/h    # Player movement and collision
 │   ├── map.c/h       # Map loading and generation
-│   ├── memory.c/h    # Memory palace system
-│   ├── furniture.c/h # Furniture management
 │   ├── cabinet.c/h   # Server cabinet management
-│   ├── terminal.c/h  # Terminal emulation and PTY
-│   ├── npc.c/h       # NPC AI and behavior
-│   ├── renderer.c/h  # Raycasting and scene rendering
-│   ├── ui.c/h        # HUD, minimap, dialogue boxes
+│   ├── display.c/h   # Wall-mounted displays
+│   ├── terminal.c/h  # Terminal emulation (PTY + ANSI parsing)
+│   ├── renderer.c/h  # Raycasting engine
+│   ├── ui.c/h        # HUD and minimap
 │   ├── texture.c/h   # Texture generation and loading
 │   ├── utils.c/h     # Utility functions
 │   └── types.h       # Core data structures
-├── include/          # External headers (font8x8)
+├── include/          # External headers
+│   └── font8x8_basic.h
+├── tools/            # Map editor and utilities
 ├── assets/
-│   ├── textures/     # Custom BMP textures
-│   └── sprites/      # NPC and object sprites
-└── maps/             # Map files and memory saves
+│   └── textures/     # Custom BMP textures (optional)
+└── maps/             # Map files (.map)
 ```
 
-### Recent Improvements
+## Known Issues & Limitations
 
-**Terminal Emulation System (NEW!):**
-- Full PTY-based terminal emulation embedded in the game
-- Real bash/sh shell sessions inside server cabinets
-- Complete ANSI/VT100 escape sequence parser
-- 80x24 character display with 16-color support
-- Per-cabinet persistent sessions
-- Transform your memory palace into a server room!
+- **Display terminal text is currently disabled** due to crashes when exiting terminals
+- Displays show as solid dark blue/teal screens instead of live terminal content
+- Some terminal apps may not work perfectly (clear command issues reported)
+- Performance could be better (no optimization yet)
+- Map editor is basic and could use many improvements
+- No sound or music
+- Raycasting has some visual artifacts
 
-**Visual Enhancements:**
-- Fixed memory plaque rendering (no more nausea-inducing zoom)
-- Doom-style angle-based sprite rendering (8 directions) for furniture and NPCs
-- Memory plaques display as stable framed text boxes
-- Ceiling/floor rendering reverted to original stable values
+See `TODO.md` for planned improvements.
 
-**NPC System:**
-- Interactive NPCs with AI (idle, wander, talk states)
-- Collision detection and pathfinding
-- Dialogue system with on-screen text boxes
-- Doom-style billboard sprites with viewing angle variation
+## Technical Details
 
-**Map System:**
-- Variable map sizes (10x10 to 200x200)
-- Dynamic memory allocation
-- GUI map editor with point-and-click editing
+### Terminal Emulation
+- Uses `forkpty()` to spawn real shell processes
+- ANSI/VT100 escape sequence state machine parser
+- 80x24 character grid (configurable via `TERM_COLS`/`TERM_ROWS` in types.h)
+- Non-blocking PTY I/O
+- Proper signal handling for shell lifecycle
 
-**Code Quality:**
-- Removed all networking/multiplayer code (simplified codebase)
-- Modular architecture with clear separation of concerns
-- Clean header organization and dependency management
-- Comprehensive documentation in each module
-- Easy to extend with new features
+### Rendering
+- Raycasting DDA (Digital Differential Analysis) for walls
+- Textured floor/ceiling with perspective-correct mapping
+- Depth-sorted sprite rendering for cabinets
+- Vertical door rendering with transparency
+- Fixed-point arithmetic for performance
+
+### Supported Platforms
+- Linux (X11, Wayland)
+- macOS
+- Requires SDL2 2.0+
+- C11 compiler (gcc, clang)
+
+## Development
+
+This project was created as an experiment in combining retro game rendering with practical Unix tools. It's a playground for:
+- Raycasting graphics programming
+- Terminal emulation techniques
+- Game engine architecture
+- Procedural texture generation
+
+The codebase is modular and relatively easy to extend. See `CLAUDE.md` for development notes.
+
+## Credits
+
+- Raycasting inspired by Wolfenstein 3D, Doom, and Lode Vandevenne's tutorials
+- Terminal rendering uses [font8x8](https://github.com/dhepper/font8x8) by dhepper
+- Built with SDL2
+
+## License
+
+MIT License - See LICENSE file for details.
+
+## Contributing
+
+This is an experimental alpha project. Bug reports and suggestions are welcome, but expect rapid changes and refactoring.
+
+---
+
+**Remember**: This is ALPHA software! Save your work frequently and don't rely on it for anything critical. Have fun exploring! 🚀

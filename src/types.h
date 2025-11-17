@@ -25,8 +25,6 @@
 #define MOVE_SPEED 3.7
 #define STRAFE_SPEED 3.0
 #define ROT_SPEED 2.4
-#define MAX_MEMORIES 96
-#define MEMORY_TEXT 160
 #define FOV (M_PI / 3.0)
 
 #define TEX_SIZE 64
@@ -35,12 +33,9 @@
 #define NUM_CEIL_TEXTURES 2
 #define NUM_CABINET_TEXTURES 4
 #define MAX_LAYOUT_LINES 32
-#define INPUT_MAX_LINES 10
 
 #define MAP_FILE_DEFAULT "maps/palace.map"
 
-#define MAX_FURNITURE 64
-#define MAX_NPCS 32
 #define MAX_CABINETS 16
 #define MAX_TERMINALS 16
 #define MAX_DISPLAYS 32
@@ -69,83 +64,6 @@ typedef struct {
     int spawn_x;
     int spawn_y;
 } Map;
-
-typedef struct {
-    double x;
-    double y;
-    int grid_x;
-    int grid_y;
-    double normal_x;
-    double normal_y;
-    char text[MEMORY_TEXT];
-} MemoryEntry;
-
-typedef enum {
-    FURN_NONE = 0,
-    FURN_TABLE_SQUARE,
-    FURN_TABLE_ROUND,
-    FURN_BED,
-    FURN_SOFA,
-    FURN_WARDROBE
-} FurnitureType;
-
-#define NUM_FURNITURE_TYPES (FURN_WARDROBE + 1)
-
-typedef struct {
-    FurnitureType type;
-    int grid_x;
-    int grid_y;
-    double x;
-    double y;
-    double angle;
-} FurnitureEntry;
-
-typedef struct {
-    const char *name;
-    const char *asset;
-    double half_width;
-    double half_depth;
-    double height;
-    uint32_t primary_color;
-    uint32_t detail_color;
-} FurnitureSpec;
-
-// NPC types
-typedef enum {
-    NPC_NONE = 0,
-    NPC_PUPPY,
-    NPC_GHOST
-} NPCType;
-
-typedef enum {
-    NPC_STATE_IDLE = 0,
-    NPC_STATE_WANDER,
-    NPC_STATE_TALK
-} NPCState;
-
-typedef struct {
-    NPCType type;
-    int grid_x;
-    int grid_y;
-    double x;
-    double y;
-    double angle;
-    NPCState state;
-    double state_timer;
-    double target_x;
-    double target_y;
-    const char *name;
-    const char *dialogue;
-    bool active;
-} NPCEntry;
-
-typedef struct {
-    const char *name;
-    const char *dialogue;
-    uint32_t color;
-    double move_speed;
-    double sprite_height;
-} NPCSpec;
 
 // Terminal emulation structures
 #define TERM_COLS 80
@@ -215,40 +133,11 @@ typedef struct {
 } DisplayEntry;
 
 typedef struct {
-    bool active;
-    int targetX;
-    int targetY;
-    double hitX;
-    double hitY;
-    double normalX;
-    double normalY;
-    size_t length;
-    char buffer[MEMORY_TEXT];
-    bool editing;
-    int edit_index;
-} MemoryInput;
-
-typedef struct {
     Map map;
     Player player;
-    MemoryEntry memories[MAX_MEMORIES];
-    int **memory_map;  // Dynamic allocation: [height][width]
     int **door_state;  // Dynamic allocation: [height][width]
-    int memory_count;
-    FurnitureEntry furniture[MAX_FURNITURE];
-    int furniture_count;
-    NPCEntry npcs[MAX_NPCS];
-    int npc_count;
-    MemoryInput input;
     char hud_message[128];
     double hud_message_timer;
-    char save_path[512];
-    bool has_save_path;
-    bool viewer_active;
-    int viewer_index;
-    bool viewer_delete_prompt;
-    int dialogue_npc_index;
-    bool dialogue_active;
     Terminal terminals[MAX_TERMINALS];
     CabinetEntry cabinets[MAX_CABINETS];
     int cabinet_count;

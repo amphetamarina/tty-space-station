@@ -261,13 +261,6 @@ void map_store_char(Map *map, int x, int y, char raw) {
         map->spawn_x = x;
         map->spawn_y = y;
         map->tiles[y][x] = '.';
-    } else if (furniture_type_from_char(tile) != FURN_NONE) {
-        map->decor[y][x] = tile;
-        map->tiles[y][x] = '.';
-    } else if (tile == 'P' || tile == 'p' || tile == 'G' || tile == 'g') {
-        // NPC decor characters
-        map->decor[y][x] = tile;
-        map->tiles[y][x] = '.';
     } else if (tile == 'C' || tile == 'c') {
         // Cabinet decor characters
         map->decor[y][x] = tile;

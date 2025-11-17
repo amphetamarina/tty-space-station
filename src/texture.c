@@ -9,7 +9,6 @@ uint32_t wall_textures[NUM_WALL_TEXTURES][TEX_SIZE * TEX_SIZE];
 uint32_t floor_textures[NUM_FLOOR_TEXTURES][TEX_SIZE * TEX_SIZE];
 uint32_t ceiling_textures[NUM_CEIL_TEXTURES][TEX_SIZE * TEX_SIZE];
 uint32_t door_texture[TEX_SIZE * TEX_SIZE];
-uint32_t furniture_textures[NUM_FURNITURE_TYPES][TEX_SIZE * TEX_SIZE];
 uint32_t cabinet_textures[NUM_CABINET_TEXTURES][TEX_SIZE * TEX_SIZE];
 uint32_t sky_texture[SKY_TEXTURE_HEIGHT * SKY_TEXTURE_WIDTH];
 uint32_t display_texture[TEX_SIZE * TEX_SIZE];
@@ -69,25 +68,6 @@ void generate_ceiling_textures(void) {
             double stripe = (sin(x * 0.3) + 1.0) * 0.5;
             uint8_t c = (uint8_t)(80 + stripe * 40);
             ceiling_textures[1][y * TEX_SIZE + x] = pack_color(c, c, c + 30);
-        }
-    }
-}
-
-void generate_furniture_textures(void) {
-    for (int t = 0; t < NUM_FURNITURE_TYPES; ++t) {
-        if (t == FURN_NONE) {
-            continue;
-        }
-        const FurnitureSpec *spec = furniture_spec((FurnitureType)t);
-        uint32_t primary = spec && spec->primary_color ? spec->primary_color : pack_color(120, 120, 120);
-        uint32_t detail = spec && spec->detail_color ? spec->detail_color : pack_color(180, 180, 180);
-        for (int y = 0; y < TEX_SIZE; ++y) {
-            for (int x = 0; x < TEX_SIZE; ++x) {
-                double gradient = (double)y / (double)TEX_SIZE;
-                double noise = ((x ^ y) & 7) / 8.0;
-                double mix = gradient * 0.5 + noise * 0.2;
-                furniture_textures[t][y * TEX_SIZE + x] = blend_colors(primary, detail, mix);
-            }
         }
     }
 }
@@ -274,14 +254,6 @@ void load_custom_textures(void) {
     }
     snprintf(path, sizeof(path), "assets/textures/door.bmp");
     load_texture_from_bmp(path, door_texture);
-    for (int i = 1; i < NUM_FURNITURE_TYPES; ++i) {
-        const FurnitureSpec *spec = furniture_spec((FurnitureType)i);
-        if (!spec || !spec->asset) {
-            continue;
-        }
-        snprintf(path, sizeof(path), "assets/textures/%s", spec->asset);
-        load_texture_from_bmp(path, furniture_textures[i]);
-    }
     for (int i = 0; i < NUM_CABINET_TEXTURES; ++i) {
         snprintf(path, sizeof(path), "assets/textures/cabinet%d.bmp", i);
         load_texture_from_bmp(path, cabinet_textures[i]);

@@ -4,7 +4,6 @@
 #include "utils.h"
 #include "map.h"
 #include "ui.h"
-#include "npc.h"
 #include "display.h"
 #include "../include/font8x8_basic.h"
 #include <math.h>
@@ -31,302 +30,6 @@ static const uint32_t ansi_colors[16] = {
     0xFF55FFFF, // 14: Bright Cyan
     0xFFFFFFFF  // 15: Bright White
 };
-
-int render_furniture(const Game *game, uint32_t *pixels, double dirX, double dirY, double planeX, double planeY,
-                     double *zbuffer) {
-    const Player *player = &game->player;
-    int highlight = -1;
-    double highlightDepth = 1e9;
-    int crossX = SCREEN_WIDTH / 2;
-    int crossY = SCREEN_HEIGHT / 2;
-    int count = game->furniture_count < MAX_FURNITURE ? game->furniture_count : MAX_FURNITURE;
-    int order[MAX_FURNITURE];
-    double distSq[MAX_FURNITURE];
-    for (int i = 0; i < count; ++i) {
-        order[i] = i;
-        double dx = game->furniture[i].x - player->x;
-        double dy = game->furniture[i].y - player->y;
-        distSq[i] = dx * dx + dy * dy;
-    }
-    for (int i = 0; i < count - 1; ++i) {
-        for (int j = i + 1; j < count; ++j) {
-            if (distSq[i] < distSq[j]) {
-                double tmpD = distSq[i];
-                distSq[i] = distSq[j];
-                distSq[j] = tmpD;
-                int tmp = order[i];
-                order[i] = order[j];
-                order[j] = tmp;
-            }
-        }
-    }
-
-    for (int pass = 0; pass < 2; ++pass) {
-        for (int ord = 0; ord < count; ++ord) {
-            int i = order[ord];
-            const FurnitureEntry *entry = &game->furniture[i];
-            if (entry->type <= FURN_NONE) {
-                continue;
-            }
-            const FurnitureSpec *spec = furniture_spec(entry->type);
-            if (!spec) {
-                continue;
-            }
-            double relX = entry->x - player->x;
-            double relY = entry->y - player->y;
-            double invDet = 1.0 / (planeX * dirY - dirX * planeY);
-            double transformX = invDet * (dirY * relX - dirX * relY);
-            double transformY = invDet * (-planeY * relX + planeX * relY);
-            if (transformY <= 0.1) {
-                continue;
-            }
-            int spriteScreenX = (int)((SCREEN_WIDTH / 2) * (1 + transformX / transformY));
-
-            // Calculate angle between player view and furniture for Doom-style sprite selection
-            double furnitureAngle = atan2(relY, relX);
-            double viewAngle = player->angle;
-            double angleDiff = furnitureAngle - viewAngle;
-            while (angleDiff < -M_PI) angleDiff += 2.0 * M_PI;
-            while (angleDiff > M_PI) angleDiff -= 2.0 * M_PI;
-
-            // Select sprite frame based on 8 directions (Doom-style)
-            int spriteDir = (int)((angleDiff + M_PI + M_PI / 8.0) / (M_PI / 4.0)) % 8;
-            double worldHeight = spec->height > 0.1 ? spec->height : 0.6;
-            double worldWidth = (spec->half_width > 0.01 ? spec->half_width * 2.0 : 0.6);
-            int spriteHeight = abs((int)((SCREEN_HEIGHT / transformY) * worldHeight));
-            int spriteWidth = abs((int)((SCREEN_HEIGHT / transformY) * worldWidth));
-            if (spriteHeight < 4) {
-                spriteHeight = 4;
-            }
-            if (spriteWidth < 4) {
-                spriteWidth = 4;
-            }
-            int drawStartY = -spriteHeight / 2 + SCREEN_HEIGHT / 2;
-            int drawEndY = spriteHeight / 2 + SCREEN_HEIGHT / 2;
-            if (drawStartY < 0) {
-                drawStartY = 0;
-            }
-            if (drawEndY >= SCREEN_HEIGHT) {
-                drawEndY = SCREEN_HEIGHT - 1;
-            }
-            int drawStartX = -spriteWidth / 2 + spriteScreenX;
-            int drawEndX = spriteWidth / 2 + spriteScreenX;
-            if (drawStartX < 0) {
-                drawStartX = 0;
-            }
-            if (drawEndX >= SCREEN_WIDTH) {
-                drawEndX = SCREEN_WIDTH - 1;
-            }
-            if (drawStartX >= drawEndX || drawStartY >= drawEndY) {
-                continue;
-            }
-            if (pass == 0) {
-                if (crossX >= drawStartX && crossX <= drawEndX && crossY >= drawStartY && crossY <= drawEndY) {
-                    if (transformY < zbuffer[crossX] && transformY < highlightDepth) {
-                        highlightDepth = transformY;
-                        highlight = i;
-                    }
-                }
-                continue;
-            }
-            for (int stripe = drawStartX; stripe <= drawEndX; ++stripe) {
-                if (stripe < 0 || stripe >= SCREEN_WIDTH) {
-                    continue;
-                }
-                if (transformY >= zbuffer[stripe]) {
-                    continue;
-                }
-                int texX = (int)((double)(stripe - drawStartX) / (double)(spriteWidth ? spriteWidth : 1) * TEX_SIZE);
-                if (texX < 0) {
-                    texX = 0;
-                }
-                if (texX >= TEX_SIZE) {
-                    texX = TEX_SIZE - 1;
-                }
-                for (int y = drawStartY; y <= drawEndY; ++y) {
-                    if (y < 0 || y >= SCREEN_HEIGHT) {
-                        continue;
-                    }
-                    int texY =
-                        (int)((double)(y - drawStartY) / (double)(spriteHeight ? spriteHeight : 1) * TEX_SIZE);
-                    if (texY < 0) {
-                        texY = 0;
-                    }
-                    if (texY >= TEX_SIZE) {
-                        texY = TEX_SIZE - 1;
-                    }
-                    uint32_t color = furniture_textures[entry->type][texY * TEX_SIZE + texX];
-
-                    // Apply Doom-style sprite angle variation (slight brightness change)
-                    double brightness = 1.0 - (spriteDir % 2) * 0.08;
-                    uint8_t r = (uint8_t)(((color >> 16) & 0xFF) * brightness);
-                    uint8_t g = (uint8_t)(((color >> 8) & 0xFF) * brightness);
-                    uint8_t b = (uint8_t)((color & 0xFF) * brightness);
-                    color = pack_color(r, g, b);
-
-                    if (i == highlight) {
-                        color = blend_colors(color, pack_color(255, 255, 255), 0.35);
-                    }
-                    draw_pixel(pixels, stripe, y, color);
-                }
-            }
-        }
-    }
-    return highlight;
-}
-
-int render_npcs(const Game *game, uint32_t *pixels, double dirX, double dirY, double planeX, double planeY,
-                double *zbuffer) {
-    const Player *player = &game->player;
-    int highlight = -1;
-    double highlightDepth = 1e9;
-    int crossX = SCREEN_WIDTH / 2;
-    int crossY = SCREEN_HEIGHT / 2;
-    int count = game->npc_count < MAX_NPCS ? game->npc_count : MAX_NPCS;
-
-    // Depth sort NPCs
-    int order[MAX_NPCS];
-    double distSq[MAX_NPCS];
-    for (int i = 0; i < count; ++i) {
-        order[i] = i;
-        double dx = game->npcs[i].x - player->x;
-        double dy = game->npcs[i].y - player->y;
-        distSq[i] = dx * dx + dy * dy;
-    }
-    for (int i = 0; i < count - 1; ++i) {
-        for (int j = i + 1; j < count; ++j) {
-            if (distSq[i] < distSq[j]) {
-                double tmpD = distSq[i];
-                distSq[i] = distSq[j];
-                distSq[j] = tmpD;
-                int tmp = order[i];
-                order[i] = order[j];
-                order[j] = tmp;
-            }
-        }
-    }
-
-    // Two-pass rendering: first pass for highlight detection, second for drawing
-    for (int pass = 0; pass < 2; ++pass) {
-        for (int ord = 0; ord < count; ++ord) {
-            int i = order[ord];
-            const NPCEntry *npc = &game->npcs[i];
-            if (!npc->active || npc->type <= NPC_NONE) {
-                continue;
-            }
-            const NPCSpec *spec = npc_spec(npc->type);
-            if (!spec) {
-                continue;
-            }
-
-            double relX = npc->x - player->x;
-            double relY = npc->y - player->y;
-            double invDet = 1.0 / (planeX * dirY - dirX * planeY);
-            double transformX = invDet * (dirY * relX - dirX * relY);
-            double transformY = invDet * (-planeY * relX + planeX * relY);
-
-            if (transformY <= 0.1) {
-                continue;
-            }
-
-            int spriteScreenX = (int)((SCREEN_WIDTH / 2) * (1 + transformX / transformY));
-
-            // Calculate angle between player view and NPC for sprite selection
-            double npcAngle = atan2(relY, relX);
-            double viewAngle = player->angle;
-            double angleDiff = npcAngle - viewAngle;
-            while (angleDiff < -M_PI) angleDiff += 2.0 * M_PI;
-            while (angleDiff > M_PI) angleDiff -= 2.0 * M_PI;
-
-            // Select sprite frame based on 8 directions
-            int spriteDir = (int)((angleDiff + M_PI + M_PI / 8.0) / (M_PI / 4.0)) % 8;
-
-            double spriteHeight = spec->sprite_height > 0.1 ? spec->sprite_height : 0.6;
-            int screenHeight = abs((int)((SCREEN_HEIGHT / transformY) * spriteHeight));
-            int screenWidth = screenHeight / 2;
-
-            if (screenHeight < 4) {
-                screenHeight = 4;
-            }
-            if (screenWidth < 4) {
-                screenWidth = 4;
-            }
-
-            int drawStartY = -screenHeight / 2 + SCREEN_HEIGHT / 2;
-            int drawEndY = screenHeight / 2 + SCREEN_HEIGHT / 2;
-            if (drawStartY < 0) {
-                drawStartY = 0;
-            }
-            if (drawEndY >= SCREEN_HEIGHT) {
-                drawEndY = SCREEN_HEIGHT - 1;
-            }
-
-            int drawStartX = -screenWidth / 2 + spriteScreenX;
-            int drawEndX = screenWidth / 2 + spriteScreenX;
-            if (drawStartX < 0) {
-                drawStartX = 0;
-            }
-            if (drawEndX >= SCREEN_WIDTH) {
-                drawEndX = SCREEN_WIDTH - 1;
-            }
-
-            if (drawStartX >= drawEndX || drawStartY >= drawEndY) {
-                continue;
-            }
-
-            // First pass: check for highlight
-            if (pass == 0) {
-                if (crossX >= drawStartX && crossX <= drawEndX && crossY >= drawStartY && crossY <= drawEndY) {
-                    if (transformY < zbuffer[crossX] && transformY < highlightDepth) {
-                        highlightDepth = transformY;
-                        highlight = i;
-                    }
-                }
-                continue;
-            }
-
-            // Second pass: draw NPC
-            for (int stripe = drawStartX; stripe <= drawEndX; ++stripe) {
-                if (stripe < 0 || stripe >= SCREEN_WIDTH) {
-                    continue;
-                }
-                if (transformY >= zbuffer[stripe]) {
-                    continue;
-                }
-
-                for (int y = drawStartY; y <= drawEndY; ++y) {
-                    if (y < 0 || y >= SCREEN_HEIGHT) {
-                        continue;
-                    }
-
-                    // Simple colored sprite based on NPC type and angle
-                    uint32_t color = spec->color;
-
-                    // Add slight color variation based on sprite direction
-                    double brightness = 1.0 - (spriteDir % 2) * 0.1;
-                    uint8_t r = (uint8_t)(((color >> 16) & 0xFF) * brightness);
-                    uint8_t g = (uint8_t)(((color >> 8) & 0xFF) * brightness);
-                    uint8_t b = (uint8_t)((color & 0xFF) * brightness);
-                    color = pack_color(r, g, b);
-
-                    // Highlight if this is the targeted NPC
-                    if (i == highlight) {
-                        color = blend_colors(color, pack_color(255, 255, 255), 0.35);
-                    }
-
-                    // Add ghost transparency effect
-                    if (npc->type == NPC_GHOST) {
-                        uint32_t base = pixels[y * SCREEN_WIDTH + stripe];
-                        color = blend_colors(base, color, 0.6);
-                    }
-
-                    draw_pixel(pixels, stripe, y, color);
-                }
-            }
-        }
-    }
-    return highlight;
-}
 
 int render_cabinets(const Game *game, uint32_t *pixels, double dirX, double dirY, double planeX, double planeY,
                     double *zbuffer) {
@@ -607,75 +310,8 @@ int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY
     return highlight;
 }
 
-void render_memory_plaques(const Game *game, uint32_t *pixels, double dirX, double dirY, double planeX, double planeY,
-                            double *zbuffer) {
-    const Player *player = &game->player;
-    for (int i = 0; i < game->memory_count; ++i) {
-        const MemoryEntry *entry = &game->memories[i];
-        double worldX = entry->x + entry->normal_x * 0.02;
-        double worldY = entry->y + entry->normal_y * 0.02;
-        double relX = worldX - player->x;
-        double relY = worldY - player->y;
-        double invDet = 1.0 / (planeX * dirY - dirX * planeY);
-        double transformX = invDet * (dirY * relX - dirX * relY);
-        double transformY = invDet * (-planeY * relX + planeX * relY);
-
-        // Only render if in front and at reasonable distance
-        if (transformY <= 0.1 || transformY > 5.0) {
-            continue;
-        }
-
-        int screenX = (int)((SCREEN_WIDTH / 2) * (1 + transformX / transformY));
-        if (screenX < 0 || screenX >= SCREEN_WIDTH) {
-            continue;
-        }
-        if (transformY > zbuffer[screenX] + 0.1) {
-            continue;
-        }
-
-        // Only show plaque if roughly centered on screen (player is looking at it)
-        if (abs(screenX - SCREEN_WIDTH / 2) > SCREEN_WIDTH / 4) {
-            continue;
-        }
-
-        // Fixed-size plaque with slight scaling based on distance
-        double distScale = 1.0 / (1.0 + transformY * 0.2);
-        distScale = clamp_int((int)(distScale * 100), 50, 100) / 100.0;
-
-        int baseWidth = clamp_int((int)(((raw_longest_line(entry->text) + 4) * 8) * distScale), 100, 320);
-        int chars_per_line = clamp_int((baseWidth - 24) / 8, 4, 40);
-        char lines[MAX_LAYOUT_LINES][MEMORY_TEXT];
-        int longestLine = 0;
-        int lineCount = layout_text_lines(entry->text, chars_per_line, lines, 6, &longestLine);
-        if (lineCount <= 0) {
-            lineCount = 1;
-            lines[0][0] = '\0';
-        }
-
-        int plaqueWidth = baseWidth;
-        int plaqueHeight = (int)((lineCount * 14 + 28) * distScale);
-
-        // Fixed position near top of screen
-        int screenY = 100;
-        int boxX = SCREEN_WIDTH / 2 - plaqueWidth / 2;
-        int boxY = screenY;
-
-        draw_rect(pixels, boxX - 2, boxY - 2, plaqueWidth + 4, plaqueHeight + 4, pack_color(10, 10, 20));
-        draw_rect(pixels, boxX, boxY, plaqueWidth, plaqueHeight, pack_color(25, 25, 50));
-        draw_rect(pixels, boxX + 2, boxY + 2, plaqueWidth - 4, plaqueHeight - 4, pack_color(40, 40, 70));
-
-        int fontSize = (int)(8 * distScale);
-        if (fontSize < 6) fontSize = 6;
-        if (fontSize > 8) fontSize = 8;
-
-        for (int line = 0; line < lineCount; ++line) {
-            draw_text(pixels, boxX + 10, boxY + 10 + line * 14, lines[line], pack_color(240, 220, 170));
-        }
-    }
-}
-
 void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
-    if (!game->map.tiles || !game->door_state || !game->memory_map) {
+    if (!game->map.tiles || !game->door_state) {
         return;  // Safety check for dynamic arrays
     }
 
@@ -751,7 +387,6 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
         int mapX = (int)player->x;
         int mapY = (int)player->y;
         char hitTile = '1';
-        int memoryHit = -1;
 
         double deltaDistX = (rayDirX == 0) ? 1e30 : fabs(1.0 / rayDirX);
         double deltaDistY = (rayDirY == 0) ? 1e30 : fabs(1.0 / rayDirY);
@@ -812,11 +447,9 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
                     continue;
                 }
                 hitTile = 'D';
-                memoryHit = -1;
                 hit = 1;
             } else if (tile_is_wall(game->map.tiles[mapY][mapX])) {
                 hitTile = game->map.tiles[mapY][mapX];
-                memoryHit = game->memory_map[mapY][mapX];
                 hit = 1;
             }
         }
@@ -859,92 +492,15 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
         }
         int texIndex = tile_texture_index(hitTile);
 
-        // Check if this is a display wall - find the associated terminal
-        const Terminal *display_term = NULL;
-        if ((hitTile == 'D' || hitTile == 'd') && !game->terminal_mode && game->skip_display_frames == 0) {
-            int disp_idx = find_display_at(game, mapX, mapY);
-            if (disp_idx >= 0 && disp_idx < game->display_count) {
-                const DisplayEntry *display = &game->displays[disp_idx];
-                int term_idx = display->terminal_index;
-                if (term_idx >= 0 && term_idx < MAX_TERMINALS) {
-                    const Terminal *term = &game->terminals[term_idx];
-                    // Only use terminal if active and properly initialized
-                    if (term->active && term->pty_fd > 0) {
-                        display_term = term;
-                    }
-                }
-            }
-        }
-
         for (int y = drawStart; y <= drawEnd; ++y) {
             int d = y * 256 - SCREEN_HEIGHT * 128 + lineHeight * 128;
             int texY = ((d * TEX_SIZE) / lineHeight) / 256;
             uint32_t color = wall_textures[texIndex][texY * TEX_SIZE + texX];
 
-            // Render display walls with terminal content
+            // Render display walls as dark screens (terminal text disabled to prevent crashes)
             if (hitTile == 'D' || hitTile == 'd') {
-                // Default: dark display background
-                color = pack_color(15, 20, 25);
-
-                // If we have an active terminal, render actual text with font
-                if (display_term) {
-                    // Map wall texture coordinates to terminal grid
-                    // Add border - use middle 85% of texture for text
-                    if (texX > TEX_SIZE * 0.075 && texX < TEX_SIZE * 0.925 &&
-                        texY > TEX_SIZE * 0.075 && texY < TEX_SIZE * 0.925) {
-
-                        int textAreaWidth = (int)(TEX_SIZE * 0.85);
-                        int textAreaHeight = (int)(TEX_SIZE * 0.85);
-                        int localX = texX - (int)(TEX_SIZE * 0.075);
-                        int localY = texY - (int)(TEX_SIZE * 0.075);
-
-                        // Map to terminal character grid
-                        int termX = (localX * TERM_COLS) / textAreaWidth;
-                        int termY = (localY * TERM_ROWS) / textAreaHeight;
-
-                        // Clamp to ensure we're within bounds
-                        if (termX < 0) termX = 0;
-                        if (termX >= TERM_COLS) termX = TERM_COLS - 1;
-                        if (termY < 0) termY = 0;
-                        if (termY >= TERM_ROWS) termY = TERM_ROWS - 1;
-
-                        if (termX >= 0 && termX < TERM_COLS && termY >= 0 && termY < TERM_ROWS) {
-                            const TermCell *cell = &display_term->cells[termY][termX];
-
-                            // Render actual character using font8x8
-                            unsigned char ch = (unsigned char)cell->ch;
-                            if (ch >= 32 && ch <= 126) {
-                                const unsigned char *bitmap = font8x8_basic[ch];
-
-                                // Calculate pixel position within character cell
-                                int charWidth = textAreaWidth / TERM_COLS;
-                                int charHeight = textAreaHeight / TERM_ROWS;
-                                int charLocalX = localX % charWidth;
-                                int charLocalY = localY % charHeight;
-
-                                // Map to 8x8 font bitmap
-                                int fontX = (charLocalX * 8) / charWidth;
-                                int fontY = (charLocalY * 8) / charHeight;
-
-                                if (fontX >= 0 && fontX < 8 && fontY >= 0 && fontY < 8) {
-                                    bool pixel_set = bitmap[fontY] & (1 << fontX);
-                                    if (pixel_set) {
-                                        // Use terminal cell colors
-                                        color = ansi_colors[cell->fg_color & 0x0F];
-                                    } else {
-                                        color = ansi_colors[cell->bg_color & 0x0F];
-                                    }
-                                } else {
-                                    // Background
-                                    color = ansi_colors[cell->bg_color & 0x0F];
-                                }
-                            }
-                        }
-                    } else {
-                        // Border area - darker frame
-                        color = pack_color(30, 35, 40);
-                    }
-                }
+                // Dark blue/teal display screen
+                color = pack_color(10, 25, 35);
             } else if (side == 1) {
                 color = blend_colors(color, pack_color(0, 0, 0), 0.3);
             }
@@ -978,13 +534,10 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
         }
     }
 
-    int furnitureHighlight = render_furniture(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
-    int npcHighlight = render_npcs(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
     int cabinetHighlight = render_cabinets(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
     // Displays are now rendered as walls, not sprites
     // int displayHighlight = render_displays(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
     int displayHighlight = -1; // TODO: Implement wall-based display highlighting
-    render_memory_plaques(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
 
     int crossX = SCREEN_WIDTH / 2;
     int crossY = SCREEN_HEIGHT / 2;
@@ -992,21 +545,7 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
         draw_pixel(pixels, crossX + i, crossY, pack_color(255, 255, 255));
         draw_pixel(pixels, crossX, crossY + i, pack_color(255, 255, 255));
     }
-    if (npcHighlight >= 0 && npcHighlight < game->npc_count) {
-        const NPCEntry *npc = &game->npcs[npcHighlight];
-        const char *name = npc_display_name(npc->type);
-        if (name && *name) {
-            int labelWidth = (int)strlen(name) * 8;
-            int labelX = crossX - labelWidth / 2;
-            if (labelX < 10) {
-                labelX = 10;
-            }
-            if (labelX + labelWidth >= SCREEN_WIDTH - 10) {
-                labelX = SCREEN_WIDTH - 10 - labelWidth;
-            }
-            draw_text(pixels, labelX, crossY + 40, name, pack_color(255, 220, 150));
-        }
-    } else if (cabinetHighlight >= 0 && cabinetHighlight < game->cabinet_count) {
+    if (cabinetHighlight >= 0 && cabinetHighlight < game->cabinet_count) {
         const CabinetEntry *entry = &game->cabinets[cabinetHighlight];
         const char *name = entry->name;
         if (name && *name) {
@@ -1034,91 +573,18 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
             }
             draw_text(pixels, labelX, crossY + 40, name, pack_color(100, 200, 255));
         }
-    } else if (furnitureHighlight >= 0 && furnitureHighlight < game->furniture_count) {
-        const FurnitureEntry *entry = &game->furniture[furnitureHighlight];
-        const char *name = furniture_display_name(entry->type);
-        if (name && *name) {
-            int labelWidth = (int)strlen(name) * 8;
-            int labelX = crossX - labelWidth / 2;
-            if (labelX < 10) {
-                labelX = 10;
-            }
-            if (labelX + labelWidth >= SCREEN_WIDTH - 10) {
-                labelX = SCREEN_WIDTH - 10 - labelWidth;
-            }
-            draw_text(pixels, labelX, crossY + 40, name, pack_color(245, 230, 180));
-        }
     }
 
     render_minimap(pixels, game);
-    char lines[3][128];
-    gather_nearby(game, lines);
     draw_text(pixels, 20, SCREEN_HEIGHT - 60,
-              "Controls: WASD move, QE strafe, Arrows rotate, M place, V view, ESC quit",
+              "Controls: WASD move, QE strafe, Arrows rotate, ESC quit",
               pack_color(255, 255, 255));
     char pos[128];
-    snprintf(pos, sizeof(pos), "Position (%.1f, %.1f) Memories: %d", player->x, player->y, game->memory_count);
+    snprintf(pos, sizeof(pos), "Position (%.1f, %.1f)", player->x, player->y);
     draw_text(pixels, 20, SCREEN_HEIGHT - 40, pos, pack_color(200, 200, 200));
-    draw_text(pixels, 20, SCREEN_HEIGHT - 25, lines[0], pack_color(255, 200, 150));
-    draw_text(pixels, 20, SCREEN_HEIGHT - 15, lines[1], pack_color(255, 200, 150));
 
     if (game->hud_message_timer > 0.0 && game->hud_message[0]) {
         draw_text(pixels, 20, SCREEN_HEIGHT - 80, game->hud_message, pack_color(250, 210, 140));
-    }
-
-    if (game->input.active) {
-        int boxW = SCREEN_WIDTH - 140;
-        if (boxW < 360) {
-            boxW = 360;
-        }
-        int textWidth = boxW - 40;
-        int chars_per_line = clamp_int(textWidth / 8, 6, 60);
-        char lines_buf[INPUT_MAX_LINES][MEMORY_TEXT];
-        int lineCount = layout_text_lines(game->input.buffer, chars_per_line, lines_buf, INPUT_MAX_LINES, NULL);
-        if (lineCount <= 0) {
-            lineCount = 1;
-            lines_buf[0][0] = '\0';
-        }
-        int boxH = lineCount * 14 + 140;
-        int boxX = (SCREEN_WIDTH - boxW) / 2;
-        int boxY = SCREEN_HEIGHT / 2 - boxH / 2;
-        draw_rect(pixels, boxX - 2, boxY - 2, boxW + 4, boxH + 4, pack_color(15, 15, 35));
-        draw_rect(pixels, boxX, boxY, boxW, boxH, pack_color(20, 20, 60));
-        draw_rect(pixels, boxX + 2, boxY + 2, boxW - 4, boxH - 4, pack_color(30, 30, 80));
-        draw_text(pixels, boxX + 14, boxY + 14, "Enter memory text", pack_color(255, 255, 255));
-        draw_text(pixels, boxX + 14, boxY + 32,
-                  "Enter: store   Esc: cancel   Shift+Enter: newline   Backspace: edit", pack_color(200, 210, 240));
-        int textY = boxY + 56;
-        uint64_t ticks = SDL_GetTicks64();
-        bool cursor_on = ((ticks / 400) % 2) == 0;
-        for (int i = 0; i < lineCount; ++i) {
-            char lineOut[MEMORY_TEXT + 6];
-            const char *prefix = (i == 0) ? "> " : "  ";
-            memcpy(lineOut, prefix, 2);
-            size_t avail = sizeof(lineOut) - 3;
-            size_t copyLen = strlen(lines_buf[i]);
-            if (copyLen > avail) {
-                copyLen = avail;
-            }
-            memcpy(lineOut + 2, lines_buf[i], copyLen);
-            lineOut[2 + copyLen] = '\0';
-            if (i == lineCount - 1 && cursor_on) {
-                size_t len = strlen(lineOut);
-                if (len < sizeof(lineOut) - 2) {
-                    lineOut[len] = '_';
-                    lineOut[len + 1] = '\0';
-                }
-            }
-            draw_text(pixels, boxX + 14, textY + i * 14, lineOut, pack_color(200, 240, 255));
-        }
-    }
-
-    if (game->viewer_active) {
-        render_memory_viewer(game, pixels);
-    }
-
-    if (game->dialogue_active) {
-        render_npc_dialogue(game, pixels);
     }
 }
 

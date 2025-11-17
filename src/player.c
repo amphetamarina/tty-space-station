@@ -1,8 +1,6 @@
 // Player movement and collision module
 #include "player.h"
 #include "map.h"
-#include "furniture.h"
-#include "npc.h"
 #include "cabinet.h"
 #include "game.h"
 #include <math.h>
@@ -29,13 +27,7 @@ int can_move(const Game *game, double nx, double ny) {
     if (!door_is_passable(game, cellX, cellY)) {
         return 0;
     }
-    if (furniture_blocks_position(game, nx, ny)) {
-        return 0;
-    }
     if (cabinet_blocks_position(game, nx, ny)) {
-        return 0;
-    }
-    if (npc_blocks_position(game, nx, ny)) {
         return 0;
     }
     return 1;
@@ -166,64 +158,4 @@ bool interact_with_door(Game *game) {
         return true;
     }
     return false;
-}
-
-int npc_pick_target(const Game *game) {
-    const Player *player = &game->player;
-    double rayDirX = cos(player->angle);
-    double rayDirY = sin(player->angle);
-
-    int bestNPC = -1;
-    double bestDist = 1e9;
-
-    for (int i = 0; i < game->npc_count; ++i) {
-        const NPCEntry *npc = &game->npcs[i];
-        if (!npc->active) {
-            continue;
-        }
-
-        double dx = npc->x - player->x;
-        double dy = npc->y - player->y;
-        double dist = sqrt(dx * dx + dy * dy);
-
-        if (dist > 3.0) {  // Max interaction distance
-            continue;
-        }
-
-        // Check if NPC is in front of player
-        double dot = dx * rayDirX + dy * rayDirY;
-        if (dot < 0.0) {
-            continue;
-        }
-
-        // Check if NPC is within view cone
-        double perpDist = fabs(dx * rayDirY - dy * rayDirX);
-        if (perpDist > 0.5) {  // Narrow cone
-            continue;
-        }
-
-        if (dist < bestDist) {
-            bestDist = dist;
-            bestNPC = i;
-        }
-    }
-
-    return bestNPC;
-}
-
-bool interact_with_npc(Game *game) {
-    int npc_index = npc_pick_target(game);
-    if (npc_index < 0) {
-        set_hud_message(game, "No NPC in range.");
-        return false;
-    }
-
-    npc_interact(game, npc_index);
-    begin_npc_dialogue(game, npc_index);
-
-    const NPCEntry *npc = &game->npcs[npc_index];
-    char msg[128];
-    snprintf(msg, sizeof(msg), "Talking to %s...", npc->name);
-    set_hud_message(game, msg);
-    return true;
 }

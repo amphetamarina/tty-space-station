@@ -18,8 +18,4 @@ bool door_is_passable(const Game *game, int gx, int gy);
 bool toggle_door_state(Game *game, int gx, int gy, bool notify);
 bool interact_with_door(Game *game);
 
-// NPC interaction functions
-int npc_pick_target(const Game *game);
-bool interact_with_npc(Game *game);
-
 #endif // PLAYER_H

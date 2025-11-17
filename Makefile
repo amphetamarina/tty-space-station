@@ -20,7 +20,7 @@ endif
 CFLAGS += -std=c11 -Wall -Wextra -pedantic -O2 -Isrc -Iinclude
 LDFLAGS += -lm -lutil
 
-TARGET = poom
+TARGET = tty-space-station
 MAPEDITOR = mapeditor
 
 # Source files
@@ -28,9 +28,6 @@ SOURCES = src/main.c \
           src/game.c \
           src/player.c \
           src/map.c \
-          src/memory.c \
-          src/furniture.c \
-          src/npc.c \
           src/cabinet.c \
           src/display.c \
           src/terminal.c \

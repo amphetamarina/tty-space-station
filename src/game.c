@@ -1,9 +1,6 @@
 // Game state management module
 #include "game.h"
 #include "map.h"
-#include "memory.h"
-#include "furniture.h"
-#include "npc.h"
 #include "cabinet.h"
 #include "display.h"
 #include "terminal.h"
@@ -17,34 +14,9 @@ int game_allocate_game_maps(Game *game, int width, int height) {
         return 0;
     }
 
-    // Allocate memory_map
-    game->memory_map = (int **)malloc(height * sizeof(int *));
-    if (!game->memory_map) {
-        return 0;
-    }
-
-    for (int y = 0; y < height; ++y) {
-        game->memory_map[y] = (int *)malloc(width * sizeof(int));
-        if (!game->memory_map[y]) {
-            // Cleanup on failure
-            for (int i = 0; i < y; ++i) {
-                free(game->memory_map[i]);
-            }
-            free(game->memory_map);
-            game->memory_map = NULL;
-            return 0;
-        }
-    }
-
     // Allocate door_state
     game->door_state = (int **)malloc(height * sizeof(int *));
     if (!game->door_state) {
-        // Cleanup memory_map on failure
-        for (int y = 0; y < height; ++y) {
-            free(game->memory_map[y]);
-        }
-        free(game->memory_map);
-        game->memory_map = NULL;
         return 0;
     }
 
@@ -57,11 +29,6 @@ int game_allocate_game_maps(Game *game, int width, int height) {
             }
             free(game->door_state);
             game->door_state = NULL;
-            for (int i = 0; i < height; ++i) {
-                free(game->memory_map[i]);
-            }
-            free(game->memory_map);
-            game->memory_map = NULL;
             return 0;
         }
     }
@@ -70,16 +37,6 @@ int game_allocate_game_maps(Game *game, int width, int height) {
 }
 
 void game_free_game_maps(Game *game) {
-    if (game->memory_map) {
-        for (int y = 0; y < game->map.height; ++y) {
-            if (game->memory_map[y]) {
-                free(game->memory_map[y]);
-            }
-        }
-        free(game->memory_map);
-        game->memory_map = NULL;
-    }
-
     if (game->door_state) {
         for (int y = 0; y < game->map.height; ++y) {
             if (game->door_state[y]) {
@@ -91,27 +48,9 @@ void game_free_game_maps(Game *game) {
     }
 }
 
-void game_reset_memory(Game *game) {
-    game->memory_count = 0;
-    if (game->memory_map) {
-        for (int y = 0; y < game->map.height; ++y) {
-            for (int x = 0; x < game->map.width; ++x) {
-                game->memory_map[y][x] = -1;
-            }
-        }
-    }
-    game->input.active = false;
-    game->input.length = 0;
-    game->input.buffer[0] = '\0';
-    game->input.editing = false;
-    game->input.edit_index = -1;
+void game_reset_state(Game *game) {
     game->hud_message[0] = '\0';
     game->hud_message_timer = 0.0;
-    game->viewer_active = false;
-    game->viewer_index = -1;
-    game->viewer_delete_prompt = false;
-    game->dialogue_active = false;
-    game->dialogue_npc_index = -1;
     if (game->door_state) {
         for (int y = 0; y < game->map.height; ++y) {
             for (int x = 0; x < game->map.width; ++x) {
@@ -147,22 +86,18 @@ void game_init(Game *game) {
     // Initialize pointers to NULL
     game->map.tiles = NULL;
     game->map.decor = NULL;
-    game->memory_map = NULL;
     game->door_state = NULL;
 
-    const char *custom_map = getenv("POOM_MAP_FILE");
-    const char *custom_save = getenv("POOM_SAVE_FILE");
-    const char *generated_out = getenv("POOM_GENERATED_MAP");
-    const char *map_source = NULL;
+    const char *custom_map = getenv("TSS_MAP_FILE");
+    const char *generated_out = getenv("TSS_GENERATED_MAP");
     if (custom_map && load_map_from_file(custom_map, &game->map)) {
-        map_source = custom_map;
+        // Loaded custom map
     } else if (load_map_from_file(MAP_FILE_DEFAULT, &game->map)) {
-        map_source = MAP_FILE_DEFAULT;
+        // Loaded default map
     } else {
         map_generate(&game->map);
         if (generated_out && *generated_out) {
             map_save_to_file(&game->map, generated_out);
-            map_source = generated_out;
         }
     }
 
@@ -173,26 +108,13 @@ void game_init(Game *game) {
         return;
     }
 
-    game_reset_memory(game);
+    game_reset_state(game);
     game->player.angle = 0.0;
     game->player.fov = FOV;
     game_pick_spawn(game);
     game_init_terminals(game);
-    rebuild_furniture(game);
-    rebuild_npcs(game);
     rebuild_cabinets(game);
     rebuild_displays(game);
-    if (custom_save && *custom_save) {
-        snprintf(game->save_path, sizeof(game->save_path), "%s", custom_save);
-        game->has_save_path = true;
-        load_memories(game);
-    } else if (map_source) {
-        snprintf(game->save_path, sizeof(game->save_path), "%s.mem", map_source);
-        game->has_save_path = true;
-        load_memories(game);
-    } else {
-        game->has_save_path = false;
-    }
 }
 
 void set_hud_message(Game *game, const char *msg) {
@@ -203,30 +125,6 @@ void set_hud_message(Game *game, const char *msg) {
     }
     snprintf(game->hud_message, sizeof(game->hud_message), "%s", msg);
     game->hud_message_timer = 3.0;
-}
-
-void refresh_text_input(Game *game) {
-    if (game->input.active) {
-        SDL_StartTextInput();
-    } else {
-        SDL_StopTextInput();
-    }
-}
-
-void begin_npc_dialogue(Game *game, int npc_index) {
-    if (npc_index < 0 || npc_index >= game->npc_count) {
-        return;
-    }
-    if (!game->npcs[npc_index].active) {
-        return;
-    }
-    game->dialogue_active = true;
-    game->dialogue_npc_index = npc_index;
-}
-
-void close_npc_dialogue(Game *game) {
-    game->dialogue_active = false;
-    game->dialogue_npc_index = -1;
 }
 
 void game_init_terminals(Game *game) {
