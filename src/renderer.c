@@ -5,6 +5,7 @@
 #include "map.h"
 #include "ui.h"
 #include "display.h"
+#include "cabinet.h"
 #include "../include/font8x8_basic.h"
 #include <math.h>
 #include <stdio.h>
@@ -167,6 +168,20 @@ int render_cabinets(const Game *game, uint32_t *pixels, double dirX, double dirY
                     // Highlight if targeted
                     if (i == highlight) {
                         color = blend_colors(color, pack_color(255, 255, 255), 0.35);
+                    }
+
+                    // Apply custom color aura if set
+                    if (entry->has_custom_color) {
+                        // Create aura effect on edges
+                        double normalizedY = (double)(y - drawStartY) / (double)wallHeight;
+                        bool isEdge = (normalizedY < 0.05 || normalizedY > 0.95 ||
+                                      hitTexU < 0.05 || hitTexU > 0.95);
+                        if (isEdge) {
+                            color = blend_colors(color, entry->custom_color, 0.7);
+                        } else {
+                            // Subtle glow even in the center
+                            color = blend_colors(color, entry->custom_color, 0.15);
+                        }
                     }
 
                     draw_pixel(pixels, x, y, color);
@@ -514,7 +529,7 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
     }
     if (cabinetHighlight >= 0 && cabinetHighlight < game->cabinet_count) {
         const CabinetEntry *entry = &game->cabinets[cabinetHighlight];
-        const char *name = entry->name;
+        const char *name = get_cabinet_display_name(entry);
         if (name && *name) {
             int labelWidth = (int)strlen(name) * 8;
             int labelX = crossX - labelWidth / 2;

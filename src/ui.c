@@ -599,3 +599,109 @@ void render_hud(uint32_t *pixels, const Game *game) {
         draw_text(pixels, shellsX, msgY, game->hud_message, pack_color(240, 210, 160));
     }
 }
+
+uint32_t get_cabinet_color_by_index(int index) {
+    static const uint32_t colors[NUM_CABINET_COLORS] = {
+        CABINET_COLOR_RED,
+        CABINET_COLOR_GREEN,
+        CABINET_COLOR_BLUE,
+        CABINET_COLOR_YELLOW,
+        CABINET_COLOR_CYAN,
+        CABINET_COLOR_MAGENTA,
+        CABINET_COLOR_ORANGE,
+        CABINET_COLOR_PURPLE,
+        CABINET_COLOR_PINK,
+        CABINET_COLOR_WHITE
+    };
+    if (index < 0 || index >= NUM_CABINET_COLORS) {
+        return CABINET_COLOR_WHITE;
+    }
+    return colors[index];
+}
+
+const char* get_cabinet_color_name_by_index(int index) {
+    static const char* names[NUM_CABINET_COLORS] = {
+        "Red",
+        "Green",
+        "Blue",
+        "Yellow",
+        "Cyan",
+        "Magenta",
+        "Orange",
+        "Purple",
+        "Pink",
+        "White"
+    };
+    if (index < 0 || index >= NUM_CABINET_COLORS) {
+        return "White";
+    }
+    return names[index];
+}
+
+void render_rename_dialog(uint32_t *pixels, const Game *game) {
+    if (!game || !game->rename_mode) {
+        return;
+    }
+
+    // Draw semi-transparent background overlay
+    for (int y = 0; y < SCREEN_HEIGHT; ++y) {
+        for (int x = 0; x < SCREEN_WIDTH; ++x) {
+            uint32_t current = pixels[y * SCREEN_WIDTH + x];
+            uint32_t darkened = blend_colors(current, pack_color(0, 0, 0), 0.5);
+            pixels[y * SCREEN_WIDTH + x] = darkened;
+        }
+    }
+
+    // Dialog box dimensions
+    int boxWidth = 500;
+    int boxHeight = 200;
+    int boxX = (SCREEN_WIDTH - boxWidth) / 2;
+    int boxY = (SCREEN_HEIGHT - boxHeight) / 2;
+
+    // Draw dialog box
+    draw_rect(pixels, boxX, boxY, boxWidth, boxHeight, pack_color(40, 40, 50));
+    draw_rect(pixels, boxX, boxY, boxWidth, 2, pack_color(100, 100, 120));
+    draw_rect(pixels, boxX, boxY, 2, boxHeight, pack_color(100, 100, 120));
+    draw_rect(pixels, boxX + boxWidth - 2, boxY, 2, boxHeight, pack_color(100, 100, 120));
+    draw_rect(pixels, boxX, boxY + boxHeight - 2, boxWidth, 2, pack_color(100, 100, 120));
+
+    // Title
+    const char *title = "RENAME CABINET";
+    int titleX = boxX + (boxWidth - (int)strlen(title) * 8) / 2;
+    draw_text(pixels, titleX, boxY + 15, title, pack_color(255, 255, 100));
+
+    // Name input label
+    draw_text(pixels, boxX + 20, boxY + 50, "Name:", pack_color(200, 200, 200));
+
+    // Name input field with cursor
+    int inputX = boxX + 80;
+    int inputY = boxY + 50;
+    int inputWidth = boxWidth - 100;
+    draw_rect(pixels, inputX - 2, inputY - 2, inputWidth + 4, 12, pack_color(80, 80, 100));
+    draw_rect(pixels, inputX, inputY, inputWidth, 8, pack_color(20, 20, 30));
+
+    // Draw the text in the buffer
+    if (game->rename_buffer[0] != '\0') {
+        draw_text(pixels, inputX + 2, inputY, game->rename_buffer, pack_color(255, 255, 255));
+    }
+
+    // Draw cursor
+    int cursorX = inputX + 2 + game->rename_cursor * 8;
+    draw_rect(pixels, cursorX, inputY, 2, 8, pack_color(255, 255, 100));
+
+    // Color selection label
+    draw_text(pixels, boxX + 20, boxY + 85, "Color:", pack_color(200, 200, 200));
+
+    // Color preview and name
+    uint32_t currentColor = get_cabinet_color_by_index(game->rename_color_index);
+    const char *colorName = get_cabinet_color_name_by_index(game->rename_color_index);
+
+    int colorBoxX = boxX + 80;
+    int colorBoxY = boxY + 82;
+    draw_rect(pixels, colorBoxX, colorBoxY, 24, 16, currentColor);
+    draw_text(pixels, colorBoxX + 32, boxY + 85, colorName, pack_color(200, 200, 200));
+
+    // Instructions
+    draw_text(pixels, boxX + 20, boxY + 120, "Use LEFT/RIGHT arrows to change color", pack_color(150, 150, 150));
+    draw_text(pixels, boxX + 20, boxY + 140, "Press ENTER to confirm, ESC to cancel", pack_color(150, 150, 150));
+}

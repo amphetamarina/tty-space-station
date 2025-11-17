@@ -17,5 +17,8 @@ int layout_text_lines(const char *text, int chars_per_line, char lines[][MAX_LAY
 // UI rendering functions
 void render_minimap(uint32_t *pixels, const Game *game);
 void render_hud(uint32_t *pixels, const Game *game);
+void render_rename_dialog(uint32_t *pixels, const Game *game);
+uint32_t get_cabinet_color_by_index(int index);
+const char* get_cabinet_color_name_by_index(int index);
 
 #endif // UI_H

@@ -8,6 +8,7 @@
 #include "cabinet.h"
 #include "display.h"
 #include "terminal.h"
+#include "ui.h"
 #include <SDL2/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -124,9 +125,64 @@ int main(void) {
                 if (game.terminal_mode && game.active_terminal >= 0 && game.active_terminal < MAX_TERMINALS) {
                     // Send text input to terminal
                     terminal_write(&game.terminals[game.active_terminal], event.text.text, strlen(event.text.text));
+                } else if (game.rename_mode) {
+                    // Handle text input in rename mode
+                    const char *text = event.text.text;
+                    size_t len = strlen(text);
+                    for (size_t i = 0; i < len; ++i) {
+                        if (game.rename_cursor < 63) {  // Leave room for null terminator
+                            game.rename_buffer[game.rename_cursor] = text[i];
+                            game.rename_cursor++;
+                            game.rename_buffer[game.rename_cursor] = '\0';
+                        }
+                    }
                 }
             } else if (event.type == SDL_KEYDOWN) {
                 SDL_Keycode sym = event.key.keysym.sym;
+
+                // Rename mode input handling
+                if (game.rename_mode) {
+                    if (sym == SDLK_RETURN) {
+                        // Confirm rename
+                        if (game.rename_cabinet_index >= 0 && game.rename_cabinet_index < game.cabinet_count) {
+                            CabinetEntry *cabinet = &game.cabinets[game.rename_cabinet_index];
+                            set_cabinet_custom_name(cabinet, game.rename_buffer);
+                            set_cabinet_custom_color(cabinet, get_cabinet_color_by_index(game.rename_color_index));
+
+                            // Show the new name in confirmation message
+                            char msg[128];
+                            const char *new_name = get_cabinet_display_name(cabinet);
+                            snprintf(msg, sizeof(msg), "Renamed to: %s", new_name);
+                            set_hud_message(&game, msg);
+                        }
+                        game.rename_mode = false;
+                        game.rename_cabinet_index = -1;
+                    } else if (sym == SDLK_ESCAPE) {
+                        // Cancel rename
+                        game.rename_mode = false;
+                        game.rename_cabinet_index = -1;
+                        set_hud_message(&game, "Rename cancelled");
+                    } else if (sym == SDLK_BACKSPACE) {
+                        // Delete character
+                        if (game.rename_cursor > 0) {
+                            game.rename_cursor--;
+                            game.rename_buffer[game.rename_cursor] = '\0';
+                        }
+                    } else if (sym == SDLK_LEFT) {
+                        // Previous color
+                        game.rename_color_index--;
+                        if (game.rename_color_index < 0) {
+                            game.rename_color_index = NUM_CABINET_COLORS - 1;
+                        }
+                    } else if (sym == SDLK_RIGHT) {
+                        // Next color
+                        game.rename_color_index++;
+                        if (game.rename_color_index >= NUM_CABINET_COLORS) {
+                            game.rename_color_index = 0;
+                        }
+                    }
+                    continue;
+                }
 
                 // Terminal mode input handling
                 if (game.terminal_mode) {
@@ -277,6 +333,47 @@ int main(void) {
                     } else if (sym == SDLK_f) {
                         // Toggle door
                         interact_with_door(&game);
+                    } else if (sym == SDLK_r) {
+                        // R key: Rename cabinet when keyboard tool is equipped
+                        if (game.hud_status.active_tool == HUD_TOOL_KEYBOARD) {
+                            double rayX = game.player.x + cos(game.player.angle) * 1.5;
+                            double rayY = game.player.y + sin(game.player.angle) * 1.5;
+                            int gx = (int)rayX;
+                            int gy = (int)rayY;
+                            int cab_idx = find_cabinet_at(&game, gx, gy);
+                            if (cab_idx >= 0) {
+                                // Enter rename mode
+                                game.rename_mode = true;
+                                game.rename_cabinet_index = cab_idx;
+
+                                // Initialize with current name or empty
+                                const char *current_name = get_cabinet_display_name(&game.cabinets[cab_idx]);
+                                if (game.cabinets[cab_idx].custom_name) {
+                                    strncpy(game.rename_buffer, current_name, 63);
+                                    game.rename_buffer[63] = '\0';
+                                    game.rename_cursor = (int)strlen(game.rename_buffer);
+                                } else {
+                                    game.rename_buffer[0] = '\0';
+                                    game.rename_cursor = 0;
+                                }
+
+                                // Initialize color index
+                                if (game.cabinets[cab_idx].has_custom_color) {
+                                    // Find the current color index
+                                    game.rename_color_index = 0;
+                                    for (int i = 0; i < NUM_CABINET_COLORS; ++i) {
+                                        if (get_cabinet_color_by_index(i) == game.cabinets[cab_idx].custom_color) {
+                                            game.rename_color_index = i;
+                                            break;
+                                        }
+                                    }
+                                } else {
+                                    game.rename_color_index = 0;  // Default to red
+                                }
+                            } else {
+                                set_hud_message(&game, "No cabinet to rename. Face a cabinet and press R.");
+                            }
+                        }
                     }
                 }
             }
@@ -288,7 +385,7 @@ int main(void) {
         lastTicks = currentTicks;
 
         bool moving_input = false;
-        if (!game.terminal_mode) {
+        if (!game.terminal_mode && !game.rename_mode) {
             if (state[SDL_SCANCODE_W]) {
                 move_player(&game, cos(game.player.angle) * MOVE_SPEED * delta,
                             sin(game.player.angle) * MOVE_SPEED * delta);
@@ -329,15 +426,17 @@ int main(void) {
         }
 
         // Show interaction hints when no HUD message is active
-        if (!game.terminal_mode && game.hud_message_timer <= 0.0) {
+        if (!game.terminal_mode && !game.rename_mode && game.hud_message_timer <= 0.0) {
             double rayX = game.player.x + cos(game.player.angle) * 1.5;
             double rayY = game.player.y + sin(game.player.angle) * 1.5;
             int gx = (int)rayX;
             int gy = (int)rayY;
 
             // Check what the player is facing
-            if (find_cabinet_at(&game, gx, gy) >= 0) {
-                snprintf(game.hud_message, sizeof(game.hud_message), "Press U to activate cabinet");
+            int cab_idx = find_cabinet_at(&game, gx, gy);
+            if (cab_idx >= 0) {
+                const char *display_name = get_cabinet_display_name(&game.cabinets[cab_idx]);
+                snprintf(game.hud_message, sizeof(game.hud_message), "%s", display_name);
             } else if (find_display_at(&game, gx, gy) >= 0) {
                 snprintf(game.hud_message, sizeof(game.hud_message), "Press E to use display");
             } else if (game.door_state && gx >= 0 && gx < game.map.width &&
@@ -366,6 +465,10 @@ int main(void) {
             render_terminal(&game.terminals[game.active_terminal], pixels);
         } else {
             render_scene(&game, pixels, zbuffer);
+            // Render rename dialog on top if active
+            if (game.rename_mode) {
+                render_rename_dialog(pixels, &game);
+            }
         }
 
         SDL_UpdateTexture(video.framebuffer, NULL, pixels, SCREEN_WIDTH * sizeof(uint32_t));
