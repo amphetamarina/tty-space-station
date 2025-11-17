@@ -436,13 +436,7 @@ int main(void) {
             int cab_idx = find_cabinet_at(&game, gx, gy);
             if (cab_idx >= 0) {
                 const char *display_name = get_cabinet_display_name(&game.cabinets[cab_idx]);
-                if (game.hud_status.active_tool == HUD_TOOL_KEYBOARD) {
-                    snprintf(game.hud_message, sizeof(game.hud_message),
-                             "%s - Press U to activate, R to rename", display_name);
-                } else {
-                    snprintf(game.hud_message, sizeof(game.hud_message),
-                             "%s - Press U to activate", display_name);
-                }
+                snprintf(game.hud_message, sizeof(game.hud_message), "%s", display_name);
             } else if (find_display_at(&game, gx, gy) >= 0) {
                 snprintf(game.hud_message, sizeof(game.hud_message), "Press E to use display");
             } else if (game.door_state && gx >= 0 && gx < game.map.width &&
