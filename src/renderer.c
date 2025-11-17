@@ -617,9 +617,9 @@ void render_terminal(const Terminal *term, uint32_t *pixels) {
         return;
     }
 
-    // Calculate terminal position (centered on screen) - 50% bigger with proper scaling
-    int char_width = 10;  // Slightly bigger, properly spaced
-    int char_height = 14; // Taller for better readability
+    // Calculate terminal position (centered on screen) - scaled for 1366x768 resolution
+    int char_width = 14;  // Larger font for better readability at higher resolution
+    int char_height = 20; // Proportionally taller
     int term_pixel_width = TERM_COLS * char_width;
     int term_pixel_height = TERM_ROWS * char_height;
     int start_x = (SCREEN_WIDTH - term_pixel_width) / 2;

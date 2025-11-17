@@ -300,9 +300,11 @@ int main(void) {
             }
         }
 
-        // Update only the active terminal when in terminal mode
-        if (game.terminal_mode && game.active_terminal >= 0 && game.active_terminal < MAX_TERMINALS) {
-            terminal_update(&game.terminals[game.active_terminal]);
+        // Update all active terminals (so displays show live output even when not in fullscreen)
+        for (int i = 0; i < MAX_TERMINALS; i++) {
+            if (game.terminals[i].active) {
+                terminal_update(&game.terminals[i]);
+            }
         }
 
         // Decrement skip counter
