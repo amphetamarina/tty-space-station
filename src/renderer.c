@@ -403,6 +403,15 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
     double planeX = -sin(player->angle) * tan(player->fov / 2.0);
     double planeY = cos(player->angle) * tan(player->fov / 2.0);
 
+#if DEBUG_MODE
+    static int scene_frame_counter = 0;
+    if (scene_frame_counter % 120 == 0) {  // Log every 2 seconds
+        printf("[DEBUG SCENE] Player at (%.2f, %.2f) angle=%.2f displays=%d\n",
+               player->x, player->y, player->angle, game->display_count);
+    }
+    scene_frame_counter++;
+#endif
+
     // Render sky first (Doom-style cylindrical panorama)
     for (int y = 0; y < SCREEN_HEIGHT / 2; ++y) {
         for (int x = 0; x < SCREEN_WIDTH; ++x) {
@@ -581,6 +590,14 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
 
             // Render display walls with terminal content
             if (hitTile == 'D' || hitTile == 'd') {
+#if DEBUG_MODE
+                static int display_hit_counter = 0;
+                if (display_hit_counter % 120 == 0) {  // Log every 2 seconds
+                    printf("[DEBUG WALL] Hit display tile 'D' at map(%d,%d) x=%d y=%d\n",
+                           mapX, mapY, x, y);
+                }
+                display_hit_counter++;
+#endif
                 // Default to dark screen color
                 color = pack_color(10, 25, 35);
 
