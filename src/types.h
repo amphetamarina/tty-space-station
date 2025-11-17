@@ -19,8 +19,8 @@
 
 #define MAP_WIDTH 48
 #define MAP_HEIGHT 48
-#define SCREEN_WIDTH 960
-#define SCREEN_HEIGHT 600
+#define SCREEN_WIDTH 1920
+#define SCREEN_HEIGHT 1200
 #define MAX_DEPTH 32.0
 #define MOVE_SPEED 3.7
 #define STRAFE_SPEED 3.0

@@ -287,14 +287,38 @@ int render_displays(const Game *game, uint32_t *pixels, double dirX, double dirY
                     if (termX >= 0 && termX < TERM_COLS && termY >= 0 && termY < TERM_ROWS) {
                         const TermCell *cell = &term->cells[termY][termX];
 
-                        // Simple character rendering - use background color if char is space or non-printable
-                        if (cell->ch > 32 && cell->ch < 127) {
-                            // Foreground color (simplified - use white for now)
-                            color = pack_color(200, 200, 200);
-                        } else {
-                            // Background color (dark)
-                            color = pack_color(10, 15, 20);
+                        // Get character position within the cell
+                        int charWidth = screenWidthTex / TERM_COLS;
+                        int charHeight = screenHeightTex / TERM_ROWS;
+                        int charPosX = screenTexX - (termX * charWidth);
+                        int charPosY = screenTexY - (termY * charHeight);
+
+                        // Map to 8x8 font bitmap coordinates
+                        int fontX = (charPosX * 8) / charWidth;
+                        int fontY = (charPosY * 8) / charHeight;
+
+                        // Clamp to valid range
+                        if (fontX < 0) fontX = 0;
+                        if (fontX > 7) fontX = 7;
+                        if (fontY < 0) fontY = 0;
+                        if (fontY > 7) fontY = 7;
+
+                        // Get character bitmap
+                        unsigned char ch = (unsigned char)cell->ch;
+                        if (ch < 32 || ch > 126) {
+                            ch = ' ';
                         }
+                        const unsigned char *bitmap = font8x8_basic[ch];
+
+                        // Check if this pixel is set in the font bitmap
+                        bool pixel_set = bitmap[fontY] & (1 << fontX);
+
+                        // Get colors from ANSI palette
+                        uint32_t bg_color = ansi_colors[cell->bg_color & 0x0F];
+                        uint32_t fg_color = ansi_colors[cell->fg_color & 0x0F];
+
+                        // Use foreground or background color based on bitmap
+                        color = pixel_set ? fg_color : bg_color;
                     }
                 }
 
