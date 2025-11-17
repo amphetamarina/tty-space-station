@@ -861,13 +861,17 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
 
         // Check if this is a display wall - find the associated terminal
         const Terminal *display_term = NULL;
-        if (hitTile == 'D' || hitTile == 'd') {
+        if ((hitTile == 'D' || hitTile == 'd') && !game->terminal_mode) {
             int disp_idx = find_display_at(game, mapX, mapY);
             if (disp_idx >= 0 && disp_idx < game->display_count) {
                 const DisplayEntry *display = &game->displays[disp_idx];
                 int term_idx = display->terminal_index;
-                if (term_idx >= 0 && term_idx < MAX_TERMINALS && game->terminals[term_idx].active) {
-                    display_term = &game->terminals[term_idx];
+                if (term_idx >= 0 && term_idx < MAX_TERMINALS) {
+                    const Terminal *term = &game->terminals[term_idx];
+                    // Only use terminal if active and properly initialized
+                    if (term->active && term->pty_fd > 0) {
+                        display_term = term;
+                    }
                 }
             }
         }
@@ -897,6 +901,12 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
                         // Map to terminal character grid
                         int termX = (localX * TERM_COLS) / textAreaWidth;
                         int termY = (localY * TERM_ROWS) / textAreaHeight;
+
+                        // Clamp to ensure we're within bounds
+                        if (termX < 0) termX = 0;
+                        if (termX >= TERM_COLS) termX = TERM_COLS - 1;
+                        if (termY < 0) termY = 0;
+                        if (termY >= TERM_ROWS) termY = TERM_ROWS - 1;
 
                         if (termX >= 0 && termX < TERM_COLS && termY >= 0 && termY < TERM_ROWS) {
                             const TermCell *cell = &display_term->cells[termY][termX];

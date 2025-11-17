@@ -343,9 +343,11 @@ int main(void) {
             }
         }
 
-        // Update terminals if in terminal mode
-        if (game.terminal_mode && game.active_terminal >= 0 && game.active_terminal < MAX_TERMINALS) {
-            terminal_update(&game.terminals[game.active_terminal]);
+        // Update all active terminals (not just the one being viewed)
+        for (int i = 0; i < MAX_TERMINALS; i++) {
+            if (game.terminals[i].active && game.terminals[i].pty_fd > 0) {
+                terminal_update(&game.terminals[i]);
+            }
         }
 
         npc_update_ai(&game, delta);
