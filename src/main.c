@@ -77,6 +77,7 @@ int main(void) {
     generate_floor_textures();
     generate_ceiling_textures();
     generate_furniture_textures();
+    generate_cabinet_texture();
     load_custom_textures();
 
     Game game;

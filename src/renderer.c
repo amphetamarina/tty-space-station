@@ -307,6 +307,122 @@ int render_npcs(const Game *game, uint32_t *pixels, double dirX, double dirY, do
     return highlight;
 }
 
+int render_cabinets(const Game *game, uint32_t *pixels, double dirX, double dirY, double planeX, double planeY,
+                    double *zbuffer) {
+    const Player *player = &game->player;
+    int highlight = -1;
+    double highlightDepth = 1e9;
+    int crossX = SCREEN_WIDTH / 2;
+    int crossY = SCREEN_HEIGHT / 2;
+    int count = game->cabinet_count < MAX_CABINETS ? game->cabinet_count : MAX_CABINETS;
+    int order[MAX_CABINETS];
+    double distSq[MAX_CABINETS];
+
+    for (int i = 0; i < count; ++i) {
+        order[i] = i;
+        double dx = game->cabinets[i].x - player->x;
+        double dy = game->cabinets[i].y - player->y;
+        distSq[i] = dx * dx + dy * dy;
+    }
+
+    // Sort by distance (furthest first)
+    for (int i = 0; i < count - 1; ++i) {
+        for (int j = i + 1; j < count; ++j) {
+            if (distSq[i] < distSq[j]) {
+                double tmpD = distSq[i];
+                distSq[i] = distSq[j];
+                distSq[j] = tmpD;
+                int tmp = order[i];
+                order[i] = order[j];
+                order[j] = tmp;
+            }
+        }
+    }
+
+    // Two-pass rendering: first pass for hit detection, second for drawing
+    for (int pass = 0; pass < 2; ++pass) {
+        for (int ord = 0; ord < count; ++ord) {
+            int i = order[ord];
+            const CabinetEntry *entry = &game->cabinets[i];
+
+            double relX = entry->x - player->x;
+            double relY = entry->y - player->y;
+            double invDet = 1.0 / (planeX * dirY - dirX * planeY);
+            double transformX = invDet * (dirY * relX - dirX * relY);
+            double transformY = invDet * (-planeY * relX + planeX * relY);
+
+            if (transformY <= 0.1) {
+                continue;
+            }
+
+            int spriteScreenX = (int)((SCREEN_WIDTH / 2) * (1 + transformX / transformY));
+
+            // Cabinet dimensions
+            double worldHeight = 1.2;  // Tall cabinet
+            double worldWidth = 0.8;
+            int spriteHeight = abs((int)((SCREEN_HEIGHT / transformY) * worldHeight));
+            int spriteWidth = abs((int)((SCREEN_HEIGHT / transformY) * worldWidth));
+
+            if (spriteHeight < 4) spriteHeight = 4;
+            if (spriteWidth < 4) spriteWidth = 4;
+
+            int drawStartY = -spriteHeight / 2 + SCREEN_HEIGHT / 2;
+            int drawEndY = spriteHeight / 2 + SCREEN_HEIGHT / 2;
+            if (drawStartY < 0) drawStartY = 0;
+            if (drawEndY >= SCREEN_HEIGHT) drawEndY = SCREEN_HEIGHT - 1;
+
+            int drawStartX = -spriteWidth / 2 + spriteScreenX;
+            int drawEndX = spriteWidth / 2 + spriteScreenX;
+            if (drawStartX < 0) drawStartX = 0;
+            if (drawEndX >= SCREEN_WIDTH) drawEndX = SCREEN_WIDTH - 1;
+
+            if (drawStartX >= drawEndX || drawStartY >= drawEndY) {
+                continue;
+            }
+
+            // First pass: check for crosshair hit
+            if (pass == 0) {
+                if (crossX >= drawStartX && crossX <= drawEndX &&
+                    crossY >= drawStartY && crossY <= drawEndY) {
+                    if (transformY < zbuffer[crossX] && transformY < highlightDepth) {
+                        highlightDepth = transformY;
+                        highlight = i;
+                    }
+                }
+                continue;
+            }
+
+            // Second pass: render the sprite
+            for (int stripe = drawStartX; stripe <= drawEndX; ++stripe) {
+                if (stripe < 0 || stripe >= SCREEN_WIDTH) continue;
+                if (transformY >= zbuffer[stripe]) continue;
+
+                int texX = (int)((double)(stripe - drawStartX) / (double)(spriteWidth ? spriteWidth : 1) * TEX_SIZE);
+                if (texX < 0) texX = 0;
+                if (texX >= TEX_SIZE) texX = TEX_SIZE - 1;
+
+                for (int y = drawStartY; y <= drawEndY; ++y) {
+                    if (y < 0 || y >= SCREEN_HEIGHT) continue;
+
+                    int texY = (int)((double)(y - drawStartY) / (double)(spriteHeight ? spriteHeight : 1) * TEX_SIZE);
+                    if (texY < 0) texY = 0;
+                    if (texY >= TEX_SIZE) texY = TEX_SIZE - 1;
+
+                    uint32_t color = cabinet_texture[texY * TEX_SIZE + texX];
+
+                    // Highlight if this is the targeted cabinet
+                    if (i == highlight) {
+                        color = blend_colors(color, pack_color(255, 255, 255), 0.35);
+                    }
+
+                    draw_pixel(pixels, stripe, y, color);
+                }
+            }
+        }
+    }
+    return highlight;
+}
+
 void render_memory_plaques(const Game *game, uint32_t *pixels, double dirX, double dirY, double planeX, double planeY,
                             double *zbuffer) {
     const Player *player = &game->player;
@@ -582,6 +698,7 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
 
     int furnitureHighlight = render_furniture(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
     int npcHighlight = render_npcs(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
+    int cabinetHighlight = render_cabinets(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
     render_memory_plaques(game, pixels, dirX, dirY, planeX, planeY, zbuffer);
 
     int crossX = SCREEN_WIDTH / 2;
@@ -603,6 +720,20 @@ void render_scene(const Game *game, uint32_t *pixels, double *zbuffer) {
                 labelX = SCREEN_WIDTH - 10 - labelWidth;
             }
             draw_text(pixels, labelX, crossY + 40, name, pack_color(255, 220, 150));
+        }
+    } else if (cabinetHighlight >= 0 && cabinetHighlight < game->cabinet_count) {
+        const CabinetEntry *entry = &game->cabinets[cabinetHighlight];
+        const char *name = entry->name;
+        if (name && *name) {
+            int labelWidth = (int)strlen(name) * 8;
+            int labelX = crossX - labelWidth / 2;
+            if (labelX < 10) {
+                labelX = 10;
+            }
+            if (labelX + labelWidth >= SCREEN_WIDTH - 10) {
+                labelX = SCREEN_WIDTH - 10 - labelWidth;
+            }
+            draw_text(pixels, labelX, crossY + 40, name, pack_color(150, 255, 180));
         }
     } else if (furnitureHighlight >= 0 && furnitureHighlight < game->furniture_count) {
         const FurnitureEntry *entry = &game->furniture[furnitureHighlight];
