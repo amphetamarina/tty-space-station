@@ -1,6 +1,6 @@
 # Assets
 
-Drop optional BMP textures into this directory to override POOM’s procedural
+Drop optional BMP textures into this directory to override tty-space-station’s procedural
 materials. Supported filenames (64×64 recommended):
 
 - `wall0.bmp`, `wall1.bmp`, `wall2.bmp`
@@ -12,7 +12,7 @@ materials. Supported filenames (64×64 recommended):
 - `bed.bmp`, `sofa.bmp`, `wardrobe.bmp`
 
 Images are automatically scaled to the internal resolution. If a file is
-missing, POOM falls back to the built-in generator.
+missing, tty-space-station falls back to the built-in generator.
 
 Map characters map as follows:
 

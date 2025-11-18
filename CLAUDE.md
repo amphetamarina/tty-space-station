@@ -4,7 +4,7 @@ This document provides context and guidance for future Claude Code sessions work
 
 ## Project Overview
 
-**TTY Space Station** is a Doom-style raycasting 3D game with embedded Unix terminal emulation. It was originally called "POOM" (Palace of Organized Memories) and has undergone significant refactoring to focus on the terminal/display aspects.
+**TTY Space Station** is a Doom-style raycasting 3D game with embedded Unix terminal emulation. It was originally called "tty-space-station" (Palace of Organized Memories) and has undergone significant refactoring to focus on the terminal/display aspects.
 
 ### Core Concept
 A first-person 3D space station where players can:
@@ -229,7 +229,7 @@ This project has been developed across multiple Claude Code sessions. Each sessi
 1. **Latest** - Disabled display text, removed memory/NPC/furniture systems, renamed to tty-space-station
 2. Previous - Added display wall terminals, improved terminal input (F1 exit, Ctrl keys)
 3. Earlier - Added sky texture, 3D cabinet boxes, display stacking
-4. Earlier - Reorganized monolithic poom.c into modular architecture
+4. Earlier - Reorganized monolithic tty-space-station.c into modular architecture
 5. Original - Memory palace concept with text plaques
 
 ---

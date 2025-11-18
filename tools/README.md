@@ -1,13 +1,13 @@
-# POOM Map Editor
+# tty-space-station Map Editor
 
-A graphical point-and-click map editor for creating POOM memory palace maps.
+A graphical point-and-click map editor for creating tty-space-station memory palace maps.
 
 ## Building
 
 ```bash
 make mapeditor
 # or
-make all  # builds both poom and mapeditor
+make all  # builds both tty-space-station and mapeditor
 ```
 
 ## Usage
@@ -41,7 +41,7 @@ make editor
 
 ### Tile Palette
 
-The editor includes all POOM tile types:
+The editor includes all tty-space-station tile types:
 
 **Floors:**
 - `.` - Floor 1 (stone checker)
@@ -91,7 +91,7 @@ Toggle the grid (G key) to see tile boundaries clearly, making precise editing e
 1. **Start with borders**: The editor automatically creates wall borders for new maps
 2. **Place spawn first**: Use `X` to mark where players start
 3. **Mix floor types**: Use `.`, `,`, and `;` for visual variety
-4. **Test in POOM**: Run `./poom` with `POOM_MAP_FILE=maps/your_map.map`
+4. **Test in tty-space-station**: Run `./tty-space-station` with `tty-space-station_MAP_FILE=maps/your_map.map`
 5. **Save often**: Use Ctrl+S to save your work
 6. **NPCs need space**: Place NPCs (`P`, `G`) in open floor areas so they can wander
 
@@ -110,14 +110,14 @@ Toggle the grid (G key) to see tile boundaries clearly, making precise editing e
 # 7. Place NPCs ('P', 'G') in open areas
 # 8. Press Ctrl+S to save
 # 9. Test in game:
-POOM_MAP_FILE=maps/mypalace.map ./poom
+tty-space-station_MAP_FILE=maps/mypalace.map ./tty-space-station
 ```
 
 ## Technical Details
 
 - Maps are saved as plain text ASCII files
 - Each line represents one row of tiles
-- Compatible with all POOM features
+- Compatible with all tty-space-station features
 - Supports the full tile set including NPCs
 - Dynamic memory allocation for any map size
 - Efficient rendering with viewport culling
@@ -132,7 +132,7 @@ POOM_MAP_FILE=maps/mypalace.map ./poom
 - Verify write permissions in the maps/ directory
 - Make sure the filename ends with `.map`
 
-**Map not loading in POOM:**
+**Map not loading in tty-space-station:**
 - Ensure map has at least one spawn point (`X`)
 - Check that borders are properly walled
 - Verify file path is correct

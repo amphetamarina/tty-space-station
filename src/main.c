@@ -28,7 +28,7 @@ static bool video_init(Video *video) {
         return false;
     }
     video->window =
-        SDL_CreateWindow("POOM", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, 0);
+        SDL_CreateWindow("tty-space-station", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, 0);
     if (!video->window) {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
         return false;
