@@ -14,6 +14,7 @@ A Doom-style 3D raycasting game where you explore a space station filled with fu
 
 <img width="962" height="599" alt="image" src="https://github.com/user-attachments/assets/31eee569-ddd7-4a7c-b7e2-bd2aa79d228b" />
 
+<img width="958" height="594" alt="image" src="https://github.com/user-attachments/assets/c9657ee7-6205-4b94-aabb-d56059e917c9" />
 
 
 ## What is This?
