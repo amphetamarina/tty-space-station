@@ -2,15 +2,19 @@
 
 > ⚠️ **ALPHA SOFTWARE** - This project is highly experimental and under active development. Expect bugs, crashes, and breaking changes!
 
-![alt text](logo.png)
+
 A Doom-style 3D raycasting game where you explore a space station filled with functional Unix terminals. Walk through corridors, interact with server cabinets, and use wall-mounted displays - all with real embedded terminal emulation.
 
 ![Status: Alpha](https://img.shields.io/badge/status-alpha-orange)
 ![Platform: Linux/macOS](https://img.shields.io/badge/platform-linux%20%7C%20macos-blue)
 
-## Demo
+## Screenshots
 
-https://github.com/user-attachments/assets/0f88f341-2d11-4c52-9216-f0beaec4ea48
+<img width="963" height="598" alt="image" src="https://github.com/user-attachments/assets/65e656e2-48e3-4063-ba15-99fc909f7b7e" />
+
+<img width="962" height="599" alt="image" src="https://github.com/user-attachments/assets/31eee569-ddd7-4a7c-b7e2-bd2aa79d228b" />
+
+<img width="958" height="594" alt="image" src="https://github.com/user-attachments/assets/c9657ee7-6205-4b94-aabb-d56059e917c9" />
 
 
 ## What is This?
